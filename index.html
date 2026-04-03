@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DIGISIM – Logic Circuit Simulator</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="navbar" id="navbar">
+  <div class="nav-brand">
+    <span class="brand-text">DIGI<span class="brand-accent">SIM</span></span>
+    <span class="brand-tag">v2.4</span>
+  </div>
+  <div class="nav-links" id="navLinks">
+    <a href="#home" class="nav-link active" onclick="showPage('home',this)"><i class="fa fa-home"></i> HOME</a>
+    <a href="#workspace" class="nav-link" onclick="showPage('workspace',this)"><i class="fa fa-drafting-compass"></i> WORKSPACE</a>
+    <a href="#directory" class="nav-link" onclick="navigateToDirectory(this)"><i class="fa fa-folder-open"></i> DIRECTORY</a>
+    <a href="#guides" class="nav-link" onclick="showPage('guides',this)"><i class="fa fa-book"></i> GUIDES</a>
+    <a href="#about" class="nav-link" onclick="showPage('about',this)"><i class="fa fa-users"></i> ABOUT US</a>
+  </div>
+  <button class="hamburger" id="hamburger" onclick="toggleMobileMenu()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- MOBILE MENU -->
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#home" onclick="showPage('home'); closeMobileMenu()"><i class="fa fa-home"></i> HOME</a>
+  <a href="#workspace" onclick="showPage('workspace'); closeMobileMenu()"><i class="fa fa-drafting-compass"></i> WORKSPACE</a>
+  <a href="#directory" onclick="navigateToDirectory(); closeMobileMenu()"><i class="fa fa-folder-open"></i> DIRECTORY</a>
+  <a href="#guides" onclick="showPage('guides'); closeMobileMenu()"><i class="fa fa-book"></i> GUIDES</a>
+  <a href="#about" onclick="showPage('about'); closeMobileMenu()"><i class="fa fa-users"></i> ABOUT US</a>
+</div>
+
+<!-- ============================================================ HOME PAGE -->
+<section class="page active" id="page-home">
+  <div class="hero-bg">
+    <div class="grid-overlay"></div>
+    <div class="hero-content">
+      <div class="hero-text">
+        <div class="hero-eyebrow">LBYCPG3 · GROUP 3 PROJECT</div>
+        <h1 class="hero-title">LOGIC CIRCUIT<br/><span class="hero-accent">SIMULATOR</span></h1>
+        <p class="hero-sub">Exploring digital logic through the web in a single click.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" onclick="navigateToDirectory(document.querySelector('[href=\'#directory\']'))"><i class="fa fa-play"></i> LAUNCH SIMULATION</button>
+          <button class="btn btn-outline" onclick="newDesignFromHome()"><i class="fa fa-pencil-ruler"></i> CREATE NEW DESIGN</button>
+        </div>
+      </div>
+      <div class="hero-gate-carousel">
+        <div class="gate-card" id="gateCarousel">
+          <canvas id="gateCanvas" width="220" height="160"></canvas>
+          <div class="gate-label-row">
+            <button class="gate-nav" onclick="prevGate()"><i class="fa fa-chevron-left"></i></button>
+            <span class="gate-name" id="gateName">AND GATE</span>
+            <button class="gate-nav" onclick="nextGate()"><i class="fa fa-chevron-right"></i></button>
+          </div>
+          <div class="carousel-dots-row" id="carouselDots"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-row">
+      <div class="feature-card">
+        <i class="fa fa-microchip feature-icon"></i>
+        <h3>7 Logic Gates</h3>
+        <p>AND, OR, NOT, NAND, NOR, XOR, XNOR — all interactive with real-time signal propagation.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-table feature-icon"></i>
+        <h3>Truth Tables</h3>
+        <p>Auto-generated truth tables update live as you build your circuit.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-map feature-icon"></i>
+        <h3>K-Map Simplifier</h3>
+        <p>Unique Karnaugh Map optimizer — simplify your Boolean expressions in one click.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-robot feature-icon"></i>
+        <h3>AI Guide</h3>
+        <p>Ask the AI companion how to build any circuit — step-by-step instructions.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-save feature-icon"></i>
+        <h3>Save &amp; Export</h3>
+        <p>Save your circuits locally, export JSON files, and import them back anytime.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ WORKSPACE PAGE -->
+<section class="page" id="page-workspace">
+  <div class="workspace-layout">
+
+    <div class="lib-outer" id="libOuter">
+      <aside class="component-library" id="compLib">
+        <div class="lib-header">
+          <span class="lib-header-label">COMPONENT LIBRARY</span>
+          <button class="lib-toggle" onclick="toggleLibrary()" title="Collapse library"><i class="fa fa-bars"></i></button>
+        </div>
+        <div class="lib-body" id="libBody">
+          <div class="lib-section-label">LOGIC GATES</div>
+          <div class="lib-grid">
+            <div class="comp-item" draggable="true" data-type="AND" title="AND Gate" ondragstart="dragGate(event,'AND')">
+              <canvas class="comp-mini-canvas" width="60" height="44" data-gate="AND"></canvas>
+              <span>AND</span>
+            </div>
+            <div class="comp-item" draggable="true" data-type="OR" title="OR Gate" ondragstart="dragGate(event,'OR')">
+              <canvas class="comp-mini-canvas" width="60" height="44" data-gate="OR"></canvas>
+              <span>OR</span>
+            </div>
+            <div class="comp-item" draggable="true" data-type="NAND" title="NAND Gate" ondragstart="dragGate(event,'NAND')">
+              <canvas class="comp-mini-canvas" width="60" height="44" data-gate="NAND"></canvas>
+              <span>NAND</span>
+            </div>
+            <div class="comp-item" draggable="true" data-type="NOR" title="NOR Gate" ondragstart="dragGate(event,'NOR')">
+              <canvas class="comp-mini-canvas" width="60" height="44" data-gate="NOR"></canvas>
+              <span>NOR</span>
+            </div>
+            <div class="comp-item" draggable="true" data-type="XOR" title="XOR Gate" ondragstart="dragGate(event,'XOR')">
+              <canvas class="comp-mini-canvas" width="60" height="44" data-gate="XOR"></canvas>
+              <span>XOR</span>
+            </div>
+            <div class="comp-item" draggable="true" data-type="XNOR" title="XNOR Gate" ondragstart="dragGate(event,'XNOR')">
+              <canvas class="comp-mini-canvas" width="60" height="44" data-gate="XNOR"></canvas>
+              <span>XNOR</span>
+            </div>
+            <div class="comp-item" draggable="true" data-type="NOT" title="NOT Gate" ondragstart="dragGate(event,'NOT')">
+              <canvas class="comp-mini-canvas" width="60" height="44" data-gate="NOT"></canvas>
+              <span>NOT</span>
+            </div>
+          </div>
+          <div class="lib-section-label">I/O COMPONENTS</div>
+          <div class="lib-grid">
+            <div class="comp-item" draggable="true" data-type="INPUT" title="Input Switch" ondragstart="dragGate(event,'INPUT')">
+              <div class="comp-io-icon io-switch">SW</div>
+              <span>INPUT</span>
+            </div>
+            <div class="comp-item" draggable="true" data-type="OUTPUT" title="Output LED" ondragstart="dragGate(event,'OUTPUT')">
+              <div class="comp-io-icon io-led"><i class="fa fa-circle"></i></div>
+              <span>OUTPUT</span>
+            </div>
+          </div>
+          <div class="lib-hint">
+            <i class="fa fa-info-circle"></i> Drag to canvas or click to add
+          </div>
+          <div class="lib-hint" style="margin-top:0;border-top:none;color:var(--text-muted);font-size:9px;padding-top:0;line-height:1.8">
+            <i class="fa fa-project-diagram" style="color:#4a9eff"></i> <b style="color:#4a9eff">Wiring:</b><br/>
+            Click output port → start wire<br/>
+            Click canvas → anchor a corner<br/>
+            <kbd style="background:#1f2d4a;border:1px solid #2e4070;border-radius:2px;padding:0 3px;font-size:8px">Backspace</kbd> undo last corner<br/>
+            <kbd style="background:#1f2d4a;border:1px solid #2e4070;border-radius:2px;padding:0 3px;font-size:8px">Esc</kbd> cancel wire<br/>
+            Click input port → finish<br/><br/>
+            <i class="fa fa-redo" style="color:#00e5a0"></i> <b style="color:#00e5a0">Rotate:</b><br/>
+            Select gate → press <kbd style="background:#1f2d4a;border:1px solid #2e4070;border-radius:2px;padding:0 3px;font-size:8px">R</kbd><br/>
+            Right-click → Rotate options<br/>
+            Group select → press <kbd style="background:#1f2d4a;border:1px solid #2e4070;border-radius:2px;padding:0 3px;font-size:8px">R</kbd> to rotate all<br/><br/>
+            <i class="fa fa-object-group" style="color:#4a9eff"></i> <b style="color:#4a9eff">Group select:</b><br/>
+            Drag on empty canvas to lasso<br/>
+            Right-click group for options
+          </div>
+        </div>
+      </aside>
+      <button class="lib-show-btn" id="libShowBtn" onclick="toggleLibrary()" title="Show Component Library" style="display:none">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+
+    <!-- MAIN CANVAS AREA -->
+    <div class="canvas-area">
+      <div class="toolbar">
+        <button class="tb-btn" onclick="newCircuit()" title="New blank circuit"><i class="fa fa-plus"></i> NEW</button>
+        <button class="tb-btn" onclick="saveCircuit()" title="Save circuit"><i class="fa fa-save"></i> SAVE</button>
+        <button class="tb-btn" onclick="exportCircuit()" title="Export JSON file"><i class="fa fa-file-export"></i> EXPORT</button>
+        <button class="tb-btn" onclick="importCircuit()" title="Import JSON file"><i class="fa fa-file-import"></i> IMPORT</button>
+        <button class="tb-btn" onclick="undoAction()" title="Undo (Ctrl+Z)"><i class="fa fa-undo"></i> UNDO</button>
+        <button class="tb-btn" onclick="redoAction()" title="Redo (Ctrl+Y)"><i class="fa fa-redo"></i> REDO</button>
+        <button class="tb-btn" onclick="clearCanvas()" title="Clear canvas"><i class="fa fa-trash"></i> CLEAR</button>
+        <div class="tb-sep"></div>
+        <button class="tb-btn tb-group" id="groupSelBtn" onclick="toggleGroupSelect()" title="Lasso-select: drag on empty canvas. Right-click selection for options."><i class="fa fa-object-group"></i> GROUP</button>
+        <div class="tb-sep"></div>
+        <button class="tb-btn tb-analyze" onclick="openAnalysis()" title="Analyze Circuit"><i class="fa fa-table"></i> ANALYZE</button>
+        <button class="tb-btn tb-kmap" onclick="openKmap()" title="K-Map Simplifier"><i class="fa fa-map"></i> K-MAP</button>
+        <button class="tb-btn tb-ai" onclick="openAICompanion()" title="AI Circuit Guide"><i class="fa fa-robot"></i> AI GUIDE</button>
+        <div class="tb-sep"></div>
+        <button class="tb-btn tb-sim" id="simBtn" onclick="toggleSimulation()"><i class="fa fa-play"></i> SIMULATE</button>
+        <span class="sim-status" id="simStatus">● IDLE</span>
+        <div class="tb-sep"></div>
+        <div class="zoom-group">
+          <button class="tb-btn zoom-btn" onclick="zoomOut()" title="Zoom Out"><i class="fa fa-search-minus"></i></button>
+          <span class="zoom-label" id="zoomLabel">100%</span>
+          <button class="tb-btn zoom-btn" onclick="zoomIn()" title="Zoom In"><i class="fa fa-search-plus"></i></button>
+          <button class="tb-btn zoom-btn" onclick="zoomReset()" title="Reset Zoom"><i class="fa fa-compress-arrows-alt"></i></button>
+        </div>
+        <div class="tb-sep"></div>
+        <span class="file-indicator" id="fileIndicator" title="Current open circuit">
+          <i class="fa fa-file-code"></i>
+          <span id="fileIndicatorName">Untitled.json</span>
+        </span>
+      </div>
+
+      <div class="canvas-wrapper" id="canvasWrapper">
+        <canvas id="mainCanvas"></canvas>
+        <div class="canvas-hint" id="canvasHint">
+          <i class="fa fa-arrow-left"></i> Drag components from the library<br/>
+          or click components above to add them here
+        </div>
+        <div class="wire-status" id="wireStatus" style="display:none">
+          <i class="fa fa-project-diagram"></i>
+          Routing wire — <b>click</b> canvas to add corner &nbsp;|&nbsp;
+          <kbd>Backspace</kbd> undo corner &nbsp;|&nbsp;
+          <kbd>Esc</kbd> cancel
+        </div>
+      </div>
+    </div>
+
+    <!-- PROPERTIES PANEL -->
+    <div class="props-outer" id="propsOuter">
+      <button class="props-show-btn" id="propsShowBtn" onclick="toggleProps()" title="Show Properties" style="display:none">
+        <i class="fa fa-chevron-left"></i>
+      </button>
+      <aside class="properties-panel" id="propsPanel">
+        <div class="props-header">
+          PROPERTIES
+          <button class="props-toggle" onclick="toggleProps()" title="Collapse properties"><i class="fa fa-chevron-right"></i></button>
+        </div>
+        <div class="props-body" id="propsBody">
+          <div class="no-selection" id="noSelection"><i class="fa fa-mouse-pointer"></i><br/>Select a component</div>
+          <div class="selection-props" id="selectionProps" style="display:none">
+            <div class="prop-title" id="propTitle">AND Gate</div>
+            <div class="prop-row"><span>ID</span><span id="propId" class="prop-val">—</span></div>
+            <div class="prop-row"><span>Type</span><span id="propType" class="prop-val">—</span></div>
+            <div class="prop-row" id="propInputsRow">
+              <span>Inputs</span>
+              <div style="display:flex;align-items:center;gap:4px">
+                <input type="number" id="propInputs" min="2" max="10" value="2"
+                  style="width:52px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;"
+                  onchange="updateInputCount()"/>
+              </div>
+            </div>
+            <div class="prop-row" id="propOutputRow">
+              <span>Output</span>
+              <span id="propOutput" class="prop-val out-badge">—</span>
+            </div>
+            <div class="prop-row" id="propValueRow" style="display:none">
+              <span>Value</span>
+              <button class="toggle-btn" id="propToggle" onclick="toggleInputValue()">0 (LOW)</button>
+            </div>
+            <!-- Rotation row in properties panel -->
+            <div class="prop-row" id="propRotateRow">
+              <span>Rotation</span>
+              <div style="display:flex;align-items:center;gap:4px">
+                <span id="propRotation" class="prop-val" style="min-width:34px;text-align:center">0°</span>
+                <button onclick="if(selectedComp)rotateComponent(selectedComp,90)" title="Rotate 90° clockwise"
+                  style="background:var(--bg-card);border:1px solid var(--border);color:var(--accent);width:22px;height:22px;border-radius:3px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;">
+                  <i class="fa fa-redo"></i>
+                </button>
+                <button onclick="if(selectedComp)rotateComponent(selectedComp,270)" title="Rotate 90° counter-clockwise"
+                  style="background:var(--bg-card);border:1px solid var(--border);color:var(--accent2);width:22px;height:22px;border-radius:3px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;">
+                  <i class="fa fa-undo"></i>
+                </button>
+              </div>
+            </div>
+            <div class="prop-row">
+              <span>Label</span>
+              <input type="text" id="propLabel" placeholder="label"
+                style="width:80px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;"
+                oninput="updateLabel()"/>
+            </div>
+            <button class="btn btn-danger btn-sm mt-8" onclick="deleteSelected()"><i class="fa fa-trash"></i> Delete</button>
+            <button class="btn btn-sm mt-8" style="border-color:var(--accent2);color:var(--accent2);background:transparent;width:100%" onclick="deleteGroupSelected()"><i class="fa fa-object-group"></i> Del Group</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ DIRECTORY PAGE -->
+<section class="page" id="page-directory">
+  <div class="directory-page">
+    <div class="page-header-row">
+      <h2 class="page-title">PROJECT DIRECTORY</h2>
+      <div class="dir-actions">
+        <button class="btn btn-sm btn-primary" onclick="showPage('workspace',document.querySelector('[href=\'#workspace\']'));newCircuit()"><i class="fa fa-plus"></i> NEW CIRCUIT</button>
+        <button class="btn btn-sm btn-outline" onclick="importCircuit()"><i class="fa fa-file-import"></i> IMPORT</button>
+      </div>
+    </div>
+    <div class="circuit-grid" id="circuitGrid"></div>
+    <div class="dir-empty" id="dirEmpty" style="display:none">
+      <i class="fa fa-folder-open fa-3x"></i>
+      <p>No saved circuits yet.<br/>Create one in the Workspace!</p>
+      <button class="btn btn-primary" onclick="showPage('workspace')">Go to Workspace</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ GUIDES PAGE -->
+<section class="page" id="page-guides">
+  <div class="guides-page">
+    <h2 class="page-title">GUIDES &amp; REFERENCE</h2>
+    <div class="guides-grid">
+      <div class="guide-card">
+        <div class="guide-icon"><i class="fa fa-microchip"></i></div>
+        <h3>AND Gate</h3>
+        <p>Output is HIGH only when <strong>all</strong> inputs are HIGH.</p>
+        <div class="guide-tt"><table><tr><th>A</th><th>B</th><th>Q</th></tr><tr><td>0</td><td>0</td><td>0</td></tr><tr><td>0</td><td>1</td><td>0</td></tr><tr><td>1</td><td>0</td><td>0</td></tr><tr><td>1</td><td>1</td><td>1</td></tr></table></div>
+        <div class="guide-expr">Q = A · B</div>
+      </div>
+      <div class="guide-card">
+        <div class="guide-icon"><i class="fa fa-microchip"></i></div>
+        <h3>OR Gate</h3>
+        <p>Output is HIGH when <strong>at least one</strong> input is HIGH.</p>
+        <div class="guide-tt"><table><tr><th>A</th><th>B</th><th>Q</th></tr><tr><td>0</td><td>0</td><td>0</td></tr><tr><td>0</td><td>1</td><td>1</td></tr><tr><td>1</td><td>0</td><td>1</td></tr><tr><td>1</td><td>1</td><td>1</td></tr></table></div>
+        <div class="guide-expr">Q = A + B</div>
+      </div>
+      <div class="guide-card">
+        <div class="guide-icon"><i class="fa fa-microchip"></i></div>
+        <h3>NOT Gate</h3>
+        <p>Output is the <strong>inverse</strong> of the input.</p>
+        <div class="guide-tt"><table><tr><th>A</th><th>Q</th></tr><tr><td>0</td><td>1</td></tr><tr><td>1</td><td>0</td></tr></table></div>
+        <div class="guide-expr">Q = A'</div>
+      </div>
+      <div class="guide-card">
+        <div class="guide-icon"><i class="fa fa-microchip"></i></div>
+        <h3>NAND Gate</h3>
+        <p>Output is LOW only when <strong>all</strong> inputs are HIGH (NOT AND).</p>
+        <div class="guide-tt"><table><tr><th>A</th><th>B</th><th>Q</th></tr><tr><td>0</td><td>0</td><td>1</td></tr><tr><td>0</td><td>1</td><td>1</td></tr><tr><td>1</td><td>0</td><td>1</td></tr><tr><td>1</td><td>1</td><td>0</td></tr></table></div>
+        <div class="guide-expr">Q = (A · B)'</div>
+      </div>
+      <div class="guide-card">
+        <div class="guide-icon"><i class="fa fa-microchip"></i></div>
+        <h3>NOR Gate</h3>
+        <p>Output is HIGH only when <strong>all</strong> inputs are LOW (NOT OR).</p>
+        <div class="guide-tt"><table><tr><th>A</th><th>B</th><th>Q</th></tr><tr><td>0</td><td>0</td><td>1</td></tr><tr><td>0</td><td>1</td><td>0</td></tr><tr><td>1</td><td>0</td><td>0</td></tr><tr><td>1</td><td>1</td><td>0</td></tr></table></div>
+        <div class="guide-expr">Q = (A + B)'</div>
+      </div>
+      <div class="guide-card">
+        <div class="guide-icon"><i class="fa fa-microchip"></i></div>
+        <h3>XOR Gate</h3>
+        <p>Output is HIGH when inputs are <strong>different</strong>.</p>
+        <div class="guide-tt"><table><tr><th>A</th><th>B</th><th>Q</th></tr><tr><td>0</td><td>0</td><td>0</td></tr><tr><td>0</td><td>1</td><td>1</td></tr><tr><td>1</td><td>0</td><td>1</td></tr><tr><td>1</td><td>1</td><td>0</td></tr></table></div>
+        <div class="guide-expr">Q = A ⊕ B</div>
+      </div>
+      <div class="guide-card guide-card-full">
+        <div class="guide-icon"><i class="fa fa-map"></i></div>
+        <h3>Karnaugh Map (K-Map) Simplifier — Unique Feature</h3>
+        <p>The K-Map Simplifier is DIGISIM's unique feature that automatically minimizes Boolean expressions. After building your circuit, click <strong>K-MAP</strong> in the toolbar. Enter your truth table output values and the engine will group adjacent 1s to find the Simplified Sum of Products (SOP) expression. This helps reduce gate count and optimize your circuit.</p>
+        <p style="margin-top:8px">Supports <strong>2-variable (2×2)</strong>, <strong>3-variable (2×4)</strong>, and <strong>4-variable (4×4)</strong> K-Maps with visual grouping and Boolean expression output.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ ABOUT PAGE -->
+<section class="page" id="page-about">
+  <div class="about-page">
+    <h2 class="page-title">ABOUT US</h2>
+    <p class="about-sub">LBYCPG3 — Group 3 · BS Computer Engineering · Section E25<br/>De La Salle University — Gokongwei College of Engineering</p>
+    <div class="team-grid">
+      <div class="team-card">
+        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#0f3460,#1a5276);border:2px solid #3b82f6;">
+          <span class="team-initials">MLG</span>
+        </div>
+        <h3>GO, Martin Liam K.</h3><p>12319570</p><span class="team-badge">BS-CpE / E25</span>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#0d3b2e,#1a6b52);border:2px solid #00e5a0;">
+          <span class="team-initials">RLS</span>
+        </div>
+        <h3>SEÑGA, Rommel Luigi M.</h3><p>12341673</p><span class="team-badge">BS-CpE / E25</span>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#3b1f6b,#6d28d9);border:2px solid #a855f7;">
+          <span class="team-initials">MMS</span>
+        </div>
+        <h3>SOTELO, Mitzen Mae L.</h3><p>12370878</p><span class="team-badge">BS-CpE / E25</span>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#4a1a0a,#b45309);border:2px solid #f59e0b;">
+          <span class="team-initials">AAN</span>
+        </div>
+        <h3>TRISTAN, Aaron Abel N.</h3><p>12335126</p><span class="team-badge">BS-CpE / E25</span>
+      </div>
+    </div>
+    <div class="about-desc">
+      <p>DIGISIM is an interactive educational Logic Circuit Simulator built with HTML, CSS, and JavaScript. It allows users to drag-and-drop logic gates, connect them with wires, simulate signal propagation, view truth tables, and simplify Boolean expressions using our built-in Karnaugh Map optimizer.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ CIRCUIT ANALYSIS MODAL -->
+<div class="modal-overlay" id="analysisModal" onclick="closeModal('analysisModal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span id="analysisTitle">CIRCUIT ANALYSIS</span>
+      <button class="modal-close" onclick="closeModal('analysisModal')"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="modal-body analysis-body">
+      <div class="analysis-left">
+        <div class="analysis-section-label">TRUTH TABLE</div>
+        <div class="tt-wrapper" id="ttWrapper"></div>
+      </div>
+      <div class="analysis-right">
+        <div class="analysis-section-label">LOGIC EXPRESSION</div>
+        <div class="logic-expr-box" id="logicExprBox"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="openKmap()"><i class="fa fa-map"></i> SIMPLIFY WITH K-MAP</button>
+      <button class="btn btn-outline" onclick="closeModal('analysisModal')">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ K-MAP MODAL -->
+<div class="modal-overlay" id="kmapModal" onclick="closeModal('kmapModal')">
+  <div class="modal modal-kmap" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span><i class="fa fa-map"></i> K-MAP LOGIC SIMPLIFIER</span>
+      <button class="modal-close" onclick="closeModal('kmapModal')"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="modal-body kmap-body">
+      <div class="kmap-left">
+        <div class="kmap-controls">
+          <div class="kmap-label">Number of Variables:</div>
+          <div class="kmap-var-btns">
+            <button class="var-btn active" id="varBtn2" onclick="setKmapVars(2)">2 Variables</button>
+            <button class="var-btn" id="varBtn3" onclick="setKmapVars(3)">3 Variables</button>
+            <button class="var-btn" id="varBtn4" onclick="setKmapVars(4)">4 Variables</button>
+          </div>
+        </div>
+        <div class="kmap-input-section">
+          <div class="kmap-label">Enter Minterm Values (0 or 1):</div>
+          <div class="kmap-grid-container" id="kmapInputGrid"></div>
+        </div>
+        <div class="kmap-actions">
+          <button class="btn btn-primary" onclick="solveKmap()"><i class="fa fa-bolt"></i> SIMPLIFY</button>
+          <button class="btn btn-outline" onclick="resetKmap()"><i class="fa fa-undo"></i> RESET</button>
+          <button class="btn btn-outline" onclick="fillFromTruthTable()"><i class="fa fa-table"></i> FROM CIRCUIT</button>
+        </div>
+      </div>
+      <div class="kmap-right">
+        <div class="kmap-label">K-MAP VISUALIZATION:</div>
+        <div class="kmap-visual-wrapper">
+          <div class="kmap-visual" id="kmapVisual"></div>
+        </div>
+        <div class="kmap-result-section">
+          <div class="kmap-label">SIMPLIFIED EXPRESSION:</div>
+          <div class="kmap-result" id="kmapResult"><span class="kmap-hint">Enter values and click SIMPLIFY</span></div>
+          <div class="kmap-groups-info" id="kmapGroupsInfo"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ SAVE CIRCUIT MODAL -->
+<div class="modal-overlay" id="saveModal" onclick="closeModal('saveModal')">
+  <div class="modal modal-sm" onclick="event.stopPropagation()">
+    <div class="modal-header"><span>SAVE CIRCUIT</span><button class="modal-close" onclick="closeModal('saveModal')"><i class="fa fa-times"></i></button></div>
+    <div class="modal-body" style="padding:24px">
+      <label class="input-label">Circuit Name:</label>
+      <input type="text" class="text-input" id="saveNameInput" placeholder="My Circuit" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="confirmSave()"><i class="fa fa-save"></i> SAVE</button>
+      <button class="btn btn-outline" onclick="closeModal('saveModal')">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ IMPORT GUARD MODAL -->
+<div class="modal-overlay" id="importGuardModal" onclick="importGuardCancel()">
+  <div class="modal modal-sm" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="modal-header">
+      <span><i class="fa fa-exclamation-triangle" style="color:var(--warn);margin-right:8px"></i>UNSAVED CHANGES</span>
+      <button class="modal-close" onclick="importGuardCancel()"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px 8px">
+      <p id="importGuardSubtitle"
+         style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);line-height:1.7;margin:0"></p>
+    </div>
+    <div class="modal-footer" style="flex-direction:column;gap:8px;align-items:stretch;padding:16px 24px 20px">
+      <button class="btn btn-primary" style="width:100%;justify-content:center"
+              onclick="importGuardSaveAndContinue()">
+        <i class="fa fa-save"></i> Save and Continue
+      </button>
+      <button class="btn btn-outline" style="width:100%;justify-content:center;border-color:var(--warn);color:var(--warn)"
+              onclick="importGuardDiscard()">
+        <i class="fa fa-folder-open"></i> Discard Changes
+      </button>
+      <button class="btn btn-outline" style="width:100%;justify-content:center"
+              onclick="importGuardCancel()">
+        <i class="fa fa-times"></i> Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ DIRECTORY NAVIGATION GUARD MODAL -->
+<div class="modal-overlay" id="dirGuardModal" onclick="dirGuardCancel()">
+  <div class="modal modal-sm" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="modal-header">
+      <span><i class="fa fa-folder-open" style="color:var(--accent2);margin-right:8px"></i>GO TO DIRECTORY</span>
+      <button class="modal-close" onclick="dirGuardCancel()"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px 8px">
+      <p id="dirGuardSubtitle"
+         style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);line-height:1.7;margin:0"></p>
+    </div>
+    <div class="modal-footer" style="flex-direction:column;gap:8px;align-items:stretch;padding:16px 24px 20px">
+      <button class="btn btn-primary" style="width:100%;justify-content:center"
+              onclick="dirGuardSaveChanges()">
+        <i class="fa fa-save"></i> Save Changes
+      </button>
+      <button class="btn btn-outline" style="width:100%;justify-content:center;border-color:var(--warn);color:var(--warn)"
+              onclick="dirGuardDiscard()">
+        <i class="fa fa-sign-out-alt"></i> Discard Changes
+      </button>
+      <button class="btn btn-outline" style="width:100%;justify-content:center"
+              onclick="dirGuardCancel()">
+        <i class="fa fa-times"></i> Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ AI COMPANION MODAL -->
+<div class="modal-overlay" id="aiModal" onclick="closeModal('aiModal')">
+  <div class="modal modal-ai" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span><i class="fa fa-robot"></i> AI CIRCUIT COMPANION</span>
+      <button class="modal-close" onclick="closeModal('aiModal')"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="modal-body ai-modal-body">
+      <div class="ai-chat-area" id="aiChatArea">
+        <div class="ai-msg ai-msg-assistant">
+          <div class="ai-bubble">
+            <strong>DIGISIM AI Guide</strong><br/>
+            Hello! I'm your digital logic assistant. Ask me anything — circuit design, gate behavior, Boolean algebra, how to use DIGISIM, or how to build a specific circuit.<br/><br/>
+            Try: <em>"How do I build a half adder?"</em> or <em>"How do I rotate a gate?"</em>
+          </div>
+        </div>
+      </div>
+      <div class="ai-quick-row">
+        <button class="ai-quick-btn" onclick="askAIQuick('How do I build a half adder?')">Half Adder</button>
+        <button class="ai-quick-btn" onclick="askAIQuick('How do I build a full adder?')">Full Adder</button>
+        <button class="ai-quick-btn" onclick="askAIQuick('How do I build a 2-to-1 multiplexer?')">2:1 MUX</button>
+        <button class="ai-quick-btn" onclick="askAIQuick('How do I build a SR latch?')">SR Latch</button>
+        <button class="ai-quick-btn" onclick="askAIQuick('How do I rotate gates in DIGISIM?')">Rotate</button>
+        <button class="ai-quick-btn" onclick="askAIQuick('How do I build a 2-to-4 decoder?')">Decoder</button>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" id="aiInput" class="ai-text-input" placeholder="Ask anything about digital logic..." onkeydown="if(event.key==='Enter'&&!aiIsStreaming) sendAIMessage()"/>
+        <button class="btn btn-primary" id="aiSendBtn" onclick="sendAIMessage()" style="padding:10px 16px"><i class="fa fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="script.js"></script>
+
+<!-- Wire routing status updater -->
+<script>
+setInterval(() => {
+  const ws = document.getElementById('wireStatus');
+  if (!ws) return;
+  if (typeof drawingWire !== 'undefined' && drawingWire) {
+    ws.style.display = 'flex';
+    const corners = Array.isArray(wireCorners) ? wireCorners.length : 0;
+    const cornerText = corners > 0 ? ` (${corners} anchor${corners !== 1 ? 's' : ''})` : '';
+    ws.innerHTML = `<i class="fa fa-project-diagram"></i>&nbsp; Routing wire${cornerText} — <b>click</b> canvas to anchor corner &nbsp;|&nbsp; <kbd>Backspace</kbd> undo anchor &nbsp;|&nbsp; <kbd>Esc</kbd> cancel &nbsp;|&nbsp; click target port to finish`;
+  } else {
+    ws.style.display = 'none';
+  }
+}, 80);
+</script>
+</body>
+</html>
