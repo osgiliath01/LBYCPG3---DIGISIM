@@ -1660,8 +1660,7 @@ function toggleSimulation() {
   redrawCanvas();
 }
 function propagate() {
-  for (const c of components) { if (c.type !== 'INPUT') c.value = 0; }
-  for (let pass = 0; pass < 10; pass++) {
+  for (let pass = 0; pass < 20; pass++) {  // more passes to let feedback settle
     for (const comp of components) { if (comp.type !== 'INPUT') evalComponent(comp); }
   }
 }
