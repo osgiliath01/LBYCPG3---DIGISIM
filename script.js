@@ -12,7 +12,18 @@ function showPage(name, el) {
   if (el) el.classList.add('active');
   if (name === 'directory') renderDirectory();
   if (name === 'workspace') { setTimeout(resizeCanvas, 50); }
+  // Show mobile workspace overlays only on the workspace page
+  _setMobileWorkspaceOverlaysVisible(name === 'workspace');
   window.scrollTo(0, 0);
+}
+
+function _setMobileWorkspaceOverlaysVisible(visible) {
+  const ids = ['mobileActionBar', 'mobileModeSwitcher', 'mobileWorkspaceControl'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = visible ? '' : 'none';
+  });
 }
 
 function toggleMobileMenu() {
@@ -244,9 +255,179 @@ function initCanvas() {
   canvas.addEventListener('drop', onDrop);
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
-  canvas.addEventListener('touchstart', e => onMouseDown(touchToMouse(e)), { passive: false });
-  canvas.addEventListener('touchmove', e => onMouseMove(touchToMouse(e)), { passive: false });
-  canvas.addEventListener('touchend', e => onMouseUp(touchToMouse(e)));
+  // ── TOUCH EVENTS — Smart gesture detection ───────────────────────
+  // Strategy:
+  //   1-finger tap   (< 8px move, < 350ms) → mousedown + mouseup (select/wire/place)
+  //   1-finger drag  (moved > 8px)          → drag components/lasso (spaceDown=false)
+  //   2-finger drag                         → pan canvas (spaceDown=true)
+  //   double-tap     (2 taps < 350ms apart) → dblclick (toggle INPUT / edit label)
+  let _touchStartX = 0, _touchStartY = 0;
+  let _touchStartTime = 0;
+  let _touchMoved = false;
+  let _touchIsPanning = false;   // true when 2-finger active
+  let _lastTapTime = 0;
+  let _panLastX2 = 0, _panLastY2 = 0; // 2-finger centroid
+
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      // Two-finger: start pan mode
+      _touchIsPanning = true;
+      spaceDown = true;
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      _panLastX2 = cx; _panLastY2 = cy;
+      // Also set up isPanning via a synthetic "middle mouse" equivalent
+      const r = canvas.getBoundingClientRect();
+      panLastX = cx - r.left; panLastY = cy - r.top;
+      isPanning = true; isCanvasDragging = true;
+      return;
+    }
+    // Single finger
+    _touchIsPanning = false;
+    const t = e.touches[0];
+    _touchStartX = t.clientX;
+    _touchStartY = t.clientY;
+    _touchStartTime = Date.now();
+    _touchMoved = false;
+    // In hand mode: start pan immediately on touchstart so onMouseDown enters pan path
+    if (typeof _mobileCanvasMode !== 'undefined' && _mobileCanvasMode === 'hand') {
+      spaceDown = true;
+      const r0 = canvas.getBoundingClientRect();
+      panLastX = t.clientX - r0.left; panLastY = t.clientY - r0.top;
+    } else {
+      spaceDown = false;
+    }
+    // Fire mousedown — in hand mode this enters pan, in select mode it selects/drags
+    onMouseDown({ clientX: t.clientX, clientY: t.clientY, button: 0, preventDefault: () => {} });
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      // Two-finger pan
+      _touchIsPanning = true;
+      spaceDown = true;
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const r = canvas.getBoundingClientRect();
+      // Drive pan by updating panLastX/Y so onMouseMove handles the delta
+      if (!isPanning) { isPanning = true; isCanvasDragging = true; }
+      panLastX = cx - r.left; panLastY = cy - r.top;
+      viewOffX += cx - r.left - panLastX; viewOffY += cy - r.top - panLastY;
+      // Direct delta pan (bypass onMouseMove for 2-finger)
+      const dx = cx - _panLastX2, dy = cy - _panLastY2;
+      viewOffX += dx; viewOffY += dy;
+      _panLastX2 = cx; _panLastY2 = cy;
+      redrawCanvas();
+      return;
+    }
+    if (_touchIsPanning) return;
+    const t = e.touches[0];
+    const dx = t.clientX - _touchStartX, dy = t.clientY - _touchStartY;
+    if (!_touchMoved && Math.hypot(dx, dy) > 8) {
+      _touchMoved = true;
+      // hand mode pan is already active from touchstart — nothing extra needed here
+    }
+    onMouseMove({ clientX: t.clientX, clientY: t.clientY, button: 0, preventDefault: () => {} });
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (_touchIsPanning) {
+      _touchIsPanning = false;
+      spaceDown = false;
+      isPanning = false; isCanvasDragging = false;
+      if (e.touches.length === 0) spaceDown = false;
+      return;
+    }
+    spaceDown = false;
+    isPanning = false;
+    const t = e.changedTouches[0];
+    const elapsed = Date.now() - _touchStartTime;
+
+    if (!_touchMoved && elapsed < 350) {
+      // It's a tap — check for double-tap
+      const now = Date.now();
+      const isHand = typeof _mobileCanvasMode !== 'undefined' && _mobileCanvasMode === 'hand';
+      if (now - _lastTapTime < 350) {
+        // Double tap → fire dblclick (INPUT toggle works in all modes; label edit blocked during sim)
+        onMouseUp({ clientX: t.clientX, clientY: t.clientY, button: 0, preventDefault: () => {} });
+        onDblClick({ clientX: t.clientX, clientY: t.clientY, button: 0, preventDefault: () => {} });
+        // Dispatch synthetic dblclick for label IIFE handler
+        try {
+          const synth = new MouseEvent('dblclick', {
+            bubbles: true, cancelable: true,
+            clientX: t.clientX, clientY: t.clientY
+          });
+          canvas.dispatchEvent(synth);
+        } catch(ex) {}
+        // Bug 2 fix: in hand mode the component was never selected (spaceDown=true on touchstart
+        // sent onMouseDown into pan, skipping component selection). On double-tap, manually
+        // select the tapped component and open label editor if it is a LABEL type.
+        if (typeof _mobileCanvasMode !== 'undefined' && _mobileCanvasMode === 'hand'
+            && (typeof simRunning === 'undefined' || !simRunning)) {
+          const r4 = canvas.getBoundingClientRect();
+          const _wp4 = screenToWorld(t.clientX - r4.left, t.clientY - r4.top);
+          const _c4  = getCompAt(_wp4.x, _wp4.y);
+          if (_c4 && _c4.type === 'LABEL') {
+            selectedComp = _c4; groupSelected = [];
+            updatePropsPanel(); redrawCanvas();
+            // Open inline editor — same as desktop double-click on label
+            if (typeof beginEditSelectedLabel === 'function') beginEditSelectedLabel();
+          } else if (_c4) {
+            // Non-label component: just select it so Properties button appears
+            selectedComp = _c4; groupSelected = [];
+            updatePropsPanel(); redrawCanvas();
+          }
+        }
+        _lastTapTime = 0;
+      } else {
+        _lastTapTime = now;
+        if (isHand) {
+          // In hand mode, single tap only deselects — no component selection/interaction
+          // Exception: tapping an INPUT during sim toggles it
+          spaceDown = false;
+          if (typeof simRunning !== 'undefined' && simRunning) {
+            const r3 = canvas.getBoundingClientRect();
+            const _wp = screenToWorld(t.clientX - r3.left, t.clientY - r3.top);
+            const _tc = getCompAt(_wp.x, _wp.y);
+            if (_tc && _tc.type === 'INPUT') {
+              if (((_tc.bitWidth || 1) >= 2)) { openInputBitConfigModal(_tc); }
+              else { saveState(); _tc.value = _tc.value ? 0 : 1; _tc.bitValues = [_tc.value]; propagate(); redrawCanvas(); }
+              return;
+            }
+          }
+          selectedComp = null; selectedWire = null; groupSelected = [];
+          updatePropsPanel(); redrawCanvas();
+        } else {
+          // Select mode: single tap → complete mousedown with mouseup (select/wire/place)
+          // During sim, also handle INPUT toggle on single tap for easier mobile use
+          if (typeof simRunning !== 'undefined' && simRunning) {
+            const r3 = canvas.getBoundingClientRect();
+            const _wp = screenToWorld(t.clientX - r3.left, t.clientY - r3.top);
+            const _tc = getCompAt(_wp.x, _wp.y);
+            if (_tc && _tc.type === 'INPUT') {
+              if (((_tc.bitWidth || 1) >= 2)) { openInputBitConfigModal(_tc); }
+              else { saveState(); _tc.value = _tc.value ? 0 : 1; _tc.bitValues = [_tc.value]; propagate(); updatePropsPanel(); redrawCanvas(); }
+              return;
+            }
+          }
+          onMouseUp({ clientX: t.clientX, clientY: t.clientY, button: 0, preventDefault: () => {} });
+        }
+      }
+    } else {
+      // Was a drag — just end it
+      onMouseUp({ clientX: t.clientX, clientY: t.clientY, button: 0, preventDefault: () => {} });
+    }
+    _touchMoved = false;
+  }, { passive: false });
+
+  canvas.addEventListener('touchcancel', (e) => {
+    _touchIsPanning = false; spaceDown = false;
+    isPanning = false; isCanvasDragging = false; draggingComp = null;
+    redrawCanvas();
+  }, { passive: false });
 }
 function touchToMouse(e) {
   e.preventDefault();
@@ -589,7 +770,9 @@ function onMouseDown(e) {
 
   // Always allow pan (middle mouse or space+drag)
   if (e.button === 1 || spaceDown) {
-    isPanning = true; panLastX = sc.x; panLastY = sc.y;
+    isPanning = true;
+    isCanvasDragging = true;
+    panLastX = sc.x; panLastY = sc.y;
     if (e.button === 1) e.preventDefault();
     return;
   }
@@ -1017,16 +1200,22 @@ function onMouseUp(e) {
   const sc = getCanvasPos(e);
   const { x, y } = screenToWorld(sc.x, sc.y);
 
-  if (isPanning) { isPanning = false; canvas.style.cursor = simRunning ? 'not-allowed' : ''; return; }
+  if (isPanning) {
+    isPanning = false;
+    isCanvasDragging = false;
+    canvas.style.cursor = simRunning ? 'not-allowed' : '';
+    return;
+  }
 
   // STRICT SIM LOCK: discard any dragging state during sim
   if (simRunning) {
     draggingComp = null; draggingWireSegment = null; groupDragging = false;
+    isCanvasDragging = false;
     return;
   }
 
-  if (groupDragging) { saveState(); groupDragging = false; redrawCanvas(); return; }
-  if (draggingWireSegment) { saveState(); draggingWireSegment = null; canvas.style.cursor = ''; redrawCanvas(); return; }
+  if (groupDragging) { saveState(); groupDragging = false; isCanvasDragging = false; redrawCanvas(); return; }
+  if (draggingWireSegment) { saveState(); draggingWireSegment = null; isCanvasDragging = false; canvas.style.cursor = ''; redrawCanvas(); return; }
 
   if (groupSelecting) {
     groupSelecting = false;
@@ -1038,6 +1227,7 @@ function onMouseUp(e) {
     } else {
       groupSelected = []; selectedComp = null; updatePropsPanel();
     }
+    isCanvasDragging = false;
     redrawCanvas(); return;
   }
 
@@ -1671,7 +1861,7 @@ function drawInputSwitch(comp, selected) {
   const w=60, h=36;
   ctx.save(); ctx.translate(comp.x, comp.y);
   if (comp.rotation) ctx.rotate(comp.rotation * Math.PI / 180);
-  const on = comp.value === 1;
+  const on = comp.value > 0; // Fix: switch is "on" if any bit is set
   const bitWidth = comp.bitWidth || 1;
   ctx.fillStyle = on ? 'rgba(0,229,160,0.15)' : 'rgba(30,45,74,0.5)';
   ctx.strokeStyle = on ? '#00e5a0' : '#4a9eff';
@@ -1717,6 +1907,24 @@ function drawInputSwitch(comp, selected) {
     ctx.fill(); ctx.stroke();
     ctx.shadowBlur = 0;
     
+    ctx.restore();
+  }
+  
+  // Draw bit position labels for multi-bit switches (3,2,1,0 from top to bottom)
+  if (bitWidth > 1) {
+    ctx.save();
+    ctx.translate(comp.x, comp.y);
+    if (comp.rotation) ctx.rotate(comp.rotation * Math.PI / 180);
+    ctx.font = '10px Share Tech Mono';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const portSpacing = 12;
+    for (let b = 0; b < bitWidth; b++) {
+      const portY = (b - (bitWidth - 1) / 2) * portSpacing;
+      const bitLabel = bitWidth - 1 - b; // 3,2,1,0 from bottom to top
+      ctx.fillText(String(bitLabel), w/2 + 12, portY);
+    }
     ctx.restore();
   }
   
@@ -1787,23 +1995,57 @@ function toggleSimulation() {
   simRunning = !simRunning;
   const btn = document.getElementById('simBtn');
   const status = document.getElementById('simStatus');
+  const mobileBtn = document.getElementById('mobileSimBtn');
+  const mobileStatus = document.getElementById('mobileSimStatus');
+  const propsLbl = document.getElementById('propsLabel');
+
   if (simRunning) {
+    // ── Desktop toolbar ──
     btn.innerHTML='<i class="fa fa-stop"></i> STOP'; btn.classList.add('active');
     status.textContent='● RUNNING'; status.classList.add('running');
+
+    // ── Mobile action bar — pause icon + flash green ──
+    if (mobileBtn) {
+      mobileBtn.innerHTML = '<i class="fa fa-pause"></i>';
+      mobileBtn.classList.add('sim-running-flash');
+    }
+    // ── Mobile sim status badge ──
+    if (mobileStatus) {
+      mobileStatus.textContent = '● SIMULATING';
+      mobileStatus.classList.add('running');
+      mobileStatus.style.display = 'block';
+    }
+    // ── Hide floating Properties button while simulating ──
+    if (propsLbl) propsLbl.style.display = 'none';
+
     // Clear ALL selection and interaction state when sim starts
     selectedComp = null; selectedWire = null; groupSelected = [];
     draggingComp = null; draggingWireSegment = null; groupDragging = false;
     groupSelecting = false;
+    groupSelectActive = false;
     if (drawingWire) cancelWire();
-    // Deactivate temp label if active
     if (typeof window._stopTempLabel !== 'undefined') window._stopTempLabel();
     canvas.style.cursor = 'not-allowed';
     updatePropsPanel();
     propagate();
-    showToast('🟢 Simulation started — double-click INPUT switches to toggle. Everything else is locked.', 'info');
+    showToast('🟢 Simulation started — double-tap INPUT switches to toggle. Everything else is locked.', 'info');
   } else {
+    // ── Desktop toolbar ──
     btn.innerHTML='<i class="fa fa-play"></i> SIMULATE'; btn.classList.remove('active');
     status.textContent='● IDLE'; status.classList.remove('running');
+
+    // ── Mobile action bar — restore play icon ──
+    if (mobileBtn) {
+      mobileBtn.innerHTML = '<i class="fa fa-play"></i>';
+      mobileBtn.classList.remove('sim-running-flash');
+    }
+    // ── Mobile sim status badge ──
+    if (mobileStatus) {
+      mobileStatus.textContent = '● IDLE';
+      mobileStatus.classList.remove('running');
+      mobileStatus.style.display = 'none';
+    }
+
     canvas.style.cursor = '';
     hoveredPort = null;
     showToast('Simulation stopped', 'info');
@@ -1888,10 +2130,11 @@ function updatePropsPanel() {
     document.getElementById('propRotateRow') && (document.getElementById('propRotateRow').style.display = 'none');
     const labelField = document.getElementById('propLabel');
     if (labelField) labelField.value = '';
+    _updateMobilePropsLabel();
     return;
   }
 
-  if (!selectedComp) { noSel.style.display=''; selProps.style.display='none'; return; }
+  if (!selectedComp) { noSel.style.display=''; selProps.style.display='none'; _updateMobilePropsLabel(); return; }
   noSel.style.display='none'; selProps.style.display='';
   document.getElementById('propTitle').textContent = selectedComp.type + (selectedComp.type==='INPUT'||selectedComp.type==='OUTPUT'?'':' Gate');
   document.getElementById('propId').textContent = selectedComp.id;
@@ -1946,6 +2189,108 @@ function updatePropsPanel() {
 
   const labelField = document.getElementById('propLabel');
   if (labelField) labelField.value = selectedComp.label || selectedComp.id;
+
+  // ── Mobile-only: floating "Properties" tap-target ─────────────────
+  _updateMobilePropsLabel();
+}
+
+function _updateMobilePropsLabel() {
+  const propsLbl = document.getElementById('propsLabel');
+  if (!propsLbl) return;
+  // Only show on mobile (viewport ≤ 480px), and never during simulation
+  if (window.innerWidth > 480) { propsLbl.style.display = 'none'; return; }
+  if (typeof simRunning !== 'undefined' && simRunning) { propsLbl.style.display = 'none'; return; }
+  if (!selectedComp && !selectedWire) { propsLbl.style.display = 'none'; return; }
+  if (selectedComp) {
+    const sp = worldToScreen(selectedComp.x, selectedComp.y);
+    // propsLabel is now position:fixed — convert to viewport coordinates
+    const cvs = document.getElementById('mainCanvas');
+    const cRect = cvs ? cvs.getBoundingClientRect() : { left: 0, top: 0 };
+    const vx = cRect.left + sp.x;
+    const vy = cRect.top  + sp.y;
+    propsLbl.style.left      = Math.max(4, vx - 50) + 'px';
+    propsLbl.style.top       = Math.max(4, vy - 52) + 'px';
+    propsLbl.style.transform = '';
+  } else {
+    // Wire selected — fixed centre-top
+    propsLbl.style.left      = '50%';
+    propsLbl.style.top       = '80px';
+    propsLbl.style.transform = 'translateX(-50%)';
+  }
+  propsLbl.style.display = 'block';
+  _syncMobilePropsModal();
+}
+
+function _syncMobilePropsModal() {
+  // Mirror sidebar panel data into the mobile props modal fields
+  const noSelM  = document.getElementById('noSelectionModal');
+  const selM    = document.getElementById('selectionPropsModal');
+  if (!noSelM || !selM) return;
+
+  if (!selectedComp && !selectedWire) {
+    noSelM.style.display = ''; selM.style.display = 'none'; return;
+  }
+  noSelM.style.display = 'none'; selM.style.display = '';
+
+  const get = id => document.getElementById(id);
+
+  if (selectedWire && !selectedComp) {
+    if (get('propTitleModal'))  get('propTitleModal').textContent  = 'Wire';
+    if (get('propIdModal'))     get('propIdModal').textContent     = '—';
+    if (get('propTypeModal'))   get('propTypeModal').textContent   = 'Wire';
+    if (get('propInputsRowModal'))   get('propInputsRowModal').style.display  = 'none';
+    if (get('propOutputRowModal'))   get('propOutputRowModal').style.display  = 'none';
+    if (get('propValueRowModal'))    get('propValueRowModal').style.display   = 'none';
+    if (get('propRotateRowModal'))   get('propRotateRowModal').style.display  = 'none';
+    if (get('propLabelTextRowModal'))get('propLabelTextRowModal').style.display = 'none';
+    if (get('propLabelSizeRowModal'))get('propLabelSizeRowModal').style.display = 'none';
+    if (get('propLabelColorRowModal'))get('propLabelColorRowModal').style.display = 'none';
+    if (get('propLabelBoldRowModal'))get('propLabelBoldRowModal').style.display = 'none';
+    return;
+  }
+
+  const c = selectedComp;
+  const typeLabel = c.type + (c.type==='INPUT'||c.type==='OUTPUT'||c.type==='LABEL'?'':' Gate');
+  if (get('propTitleModal'))  get('propTitleModal').textContent  = typeLabel;
+  if (get('propIdModal'))     get('propIdModal').textContent     = c.id;
+  if (get('propTypeModal'))   get('propTypeModal').textContent   = c.type;
+
+  const showInputs = (c.type!=='INPUT'&&c.type!=='OUTPUT'&&c.type!=='NOT'&&c.type!=='LABEL');
+  if (get('propInputsRowModal'))  get('propInputsRowModal').style.display  = showInputs ? '' : 'none';
+  if (get('propInputsModal'))     get('propInputsModal').value              = c.inputs;
+
+  if (get('propOutputRowModal'))  get('propOutputRowModal').style.display  = (c.type!=='INPUT'&&c.type!=='LABEL') ? '' : 'none';
+  if (get('propOutputModal')) {
+    get('propOutputModal').textContent = c.value + (c.value ? ' (HIGH)' : ' (LOW)');
+    get('propOutputModal').style.color = c.value ? 'var(--accent)' : 'var(--danger)';
+  }
+
+  if (get('propValueRowModal'))   get('propValueRowModal').style.display   = c.type==='INPUT' ? '' : 'none';
+  if (get('propToggleModal'))     get('propToggleModal').textContent       = c.value ? '1 (HIGH)' : '0 (LOW)';
+
+  if (get('propBitWidthRowModal'))  get('propBitWidthRowModal').style.display  = c.type==='INPUT' ? '' : 'none';
+  if (get('propBitWidthModal') && c.type==='INPUT') get('propBitWidthModal').value = String(c.bitWidth||1);
+
+  if (get('propDisplayModeRowModal')) get('propDisplayModeRowModal').style.display = (c.type==='INPUT'&&(c.bitWidth||1)>=2) ? '' : 'none';
+  if (get('propDisplayModeModal') && c.type==='INPUT') get('propDisplayModeModal').value = c.displayMode||'decimal';
+
+  if (get('propRotateRowModal'))  get('propRotateRowModal').style.display  = '';
+  if (get('propRotationModal'))   get('propRotationModal').textContent     = (c.rotation||0)+'°';
+
+  // Label text row (component name label, not LABEL type)
+  const isLabelType = c.type === 'LABEL';
+  if (get('propLabelTextRowModal'))  get('propLabelTextRowModal').style.display  = !isLabelType ? '' : 'none';
+  if (get('propLabelModal') && !isLabelType) get('propLabelModal').value = c.label || c.id;
+
+  // LABEL-type specific rows
+  if (get('propLabelSizeRowModal'))  get('propLabelSizeRowModal').style.display  = isLabelType ? '' : 'none';
+  if (get('propLabelColorRowModal')) get('propLabelColorRowModal').style.display = isLabelType ? '' : 'none';
+  if (get('propLabelBoldRowModal'))  get('propLabelBoldRowModal').style.display  = isLabelType ? '' : 'none';
+  if (isLabelType) {
+    if (get('propLabelSizeModal'))  get('propLabelSizeModal').value  = String(c.labelSize||14);
+    if (get('propLabelColorModal')) get('propLabelColorModal').value = c.labelColor||'#00e5a0';
+    if (get('propLabelBoldModal'))  get('propLabelBoldModal').checked = !!c.labelBold;
+  }
 }
 
 function updateInputCount() {
@@ -2190,9 +2535,16 @@ function pasteClipboard() {
 
 // ── TOOLBAR ACTIONS ─────────────────────────────────────────────
 function newCircuit() {
-  if (components.length && !confirm('Start a new circuit? Unsaved work will be lost.')) return;
+  if (components.length) {
+    showConfirm(
+      'Start a new circuit? Unsaved work will be lost.',
+      () => { _resetWorkspace(); _workspaceActive = true; },
+      'NEW CIRCUIT'
+    );
+    return;
+  }
   _resetWorkspace();
-  _workspaceActive = true;  // user has explicitly created a file
+  _workspaceActive = true;
 }
 
 // Called by the Home Page "Create New Design" button.
@@ -2255,14 +2607,15 @@ function _resetWorkspace() {
 }
 
 function clearCanvas() {
-  if (!confirm('Clear the canvas?')) return;
-  saveState();
-  components = []; wires = []; nodes = [];
-  selectedComp = null; selectedWire = null; groupSelected = [];
-  compCounter = 0; nodeCounter = 0;  // reset counters on clear
-  const hint = document.getElementById('canvasHint');
-  if (hint) hint.style.display = '';
-  updatePropsPanel(); redrawCanvas();
+  showConfirm('Clear the canvas? This cannot be undone.', () => {
+    saveState();
+    components = []; wires = []; nodes = [];
+    selectedComp = null; selectedWire = null; groupSelected = [];
+    compCounter = 0; nodeCounter = 0;
+    const hint = document.getElementById('canvasHint');
+    if (hint) hint.style.display = '';
+    updatePropsPanel(); redrawCanvas();
+  }, 'CLEAR CANVAS');
 }
 
 function saveCircuit() {
@@ -2498,10 +2851,27 @@ function fitCircuitToView() {
 }
 
 function toggleLibrary() {
+  if (window.innerWidth <= 480) {
+    // Mobile: slide panel in/out via .show class on libOuter
+    const outer = document.getElementById('libOuter');
+    if (outer) outer.classList.toggle('show');
+    return;
+  }
+  // Desktop: collapse/expand the component library
   const lib = document.getElementById('compLib');
+  if (!lib) return;
+  const isCollapsing = !lib.classList.contains('collapsed');
   lib.classList.toggle('collapsed');
   const showBtn = document.getElementById('libShowBtn');
-  if (showBtn) showBtn.style.display = lib.classList.contains('collapsed') ? 'flex' : 'none';
+  if (showBtn) showBtn.style.display = isCollapsing ? 'flex' : 'none';
+  // Swap toggle button icon: bars when open, chevron-right when collapsed
+  const toggleBtn = document.getElementById('libToggleBtn');
+  if (toggleBtn) {
+    toggleBtn.innerHTML = isCollapsing
+      ? '<i class="fa fa-chevron-right"></i>'
+      : '<i class="fa fa-bars"></i>';
+    toggleBtn.title = isCollapsing ? 'Expand library' : 'Collapse library';
+  }
   setTimeout(resizeCanvas, 350);
 }
 function toggleProps() {
@@ -2804,11 +3174,12 @@ function _doLoadCircuit(i) {
   }, 250);
 }
 function deleteCircuit(i) {
-  if (!confirm('Delete this circuit?')) return;
-  const saved=JSON.parse(localStorage.getItem('digisim_circuits')||'[]');
-  saved.splice(i,1);
-  localStorage.setItem('digisim_circuits',JSON.stringify(saved));
-  renderDirectory(); showToast('Circuit deleted','info');
+  showConfirm('Delete this circuit? This cannot be undone.', () => {
+    const saved=JSON.parse(localStorage.getItem('digisim_circuits')||'[]');
+    saved.splice(i,1);
+    localStorage.setItem('digisim_circuits',JSON.stringify(saved));
+    renderDirectory(); showToast('Circuit deleted','info');
+  }, 'DELETE CIRCUIT');
 }
 
 // ── K-MAP SIMPLIFIER ─────────────────────────────────────────────
@@ -3407,6 +3778,31 @@ function closeModal(id) {
   if (id === 'saveModal') _setSaveModalMode('save');
 }
 
+
+// ── IN-APP CONFIRM DIALOG (replaces browser confirm()) ───────────────
+let _confirmModalCallback = null;
+
+function showConfirm(message, onOk, title) {
+  const msg   = document.getElementById('confirmModalMsg');
+  const hdr   = document.getElementById('confirmModalTitle');
+  if (msg) msg.textContent = message;
+  if (hdr) hdr.innerHTML = '<i class="fa fa-exclamation-triangle" style="color:var(--warn);margin-right:8px"></i>' + (title || 'CONFIRM');
+  _confirmModalCallback = onOk || null;
+  openModal('confirmModal');
+}
+function _confirmModalOk() {
+  closeModal('confirmModal');
+  if (typeof _confirmModalCallback === 'function') {
+    const cb = _confirmModalCallback;
+    _confirmModalCallback = null;
+    cb();
+  }
+}
+function _confirmModalCancel() {
+  _confirmModalCallback = null;
+  closeModal('confirmModal');
+}
+
 // ── TOAST ────────────────────────────────────────────────────────
 let toastTimer;
 function showToast(msg, type='info') {
@@ -3422,6 +3818,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initCanvas(); renderKmapInput(); renderKmapVisual([]); updateZoomLabel();
   updateFileIndicator();
   setInterval(()=>{ if (simRunning) { propagate(); redrawCanvas(); } }, 200);
+
+  // ── MOBILE OPTIMIZATIONS ──────────────────────────────────────
+  initMobileOptimizations();
+  // Hide workspace-only mobile overlays on initial load (home page is shown first)
+  _setMobileWorkspaceOverlaysVisible(false);
 
   document.querySelectorAll('.comp-item').forEach(item => {
     item.addEventListener('click', ()=>{
@@ -3440,6 +3841,169 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+/* =========================================================
+   MOBILE OPTIMIZATIONS
+   ========================================================= */
+
+// ── Mobile library panel helpers ─────────────────────────────────
+function openMobileLibrary() {
+  const lib = document.getElementById('libOuter');
+  if (lib) lib.classList.add('show');
+}
+function closeMobileLibrary() {
+  const lib = document.getElementById('libOuter');
+  if (lib) lib.classList.remove('show');
+}
+// Alias so the close (X) button inside the mobile library works
+// (the lib-toggle button now calls toggleLibrary which handles both platforms)
+function toggleWorkspaceMenu() {
+  const menu = document.getElementById('mobileWorkspaceMenu');
+  if (menu) menu.classList.toggle('show');
+}
+// Close workspace menu when clicking elsewhere
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('mobileWorkspaceMenu');
+  const btn = document.getElementById('mobileWorkspaceBtn');
+  if (menu && menu.classList.contains('show') && !menu.contains(e.target) && e.target !== btn) {
+    menu.classList.remove('show');
+  }
+});
+
+// ── Mobile canvas mode (select vs hand/pan) ─────────────────────────
+let _mobileCanvasMode = 'select'; // 'select' | 'hand'
+
+function setMobileCanvasMode(mode) {
+  _mobileCanvasMode = mode;
+  const selectBtn = document.getElementById('selectModeBtn');
+  const handBtn   = document.getElementById('handModeBtn');
+  if (selectBtn) selectBtn.classList.toggle('active', mode === 'select');
+  if (handBtn)   handBtn.classList.toggle('active', mode === 'hand');
+  // In hand mode every 1-finger drag pans; in select mode it moves components
+  const cvs = document.getElementById('mainCanvas');
+  if (cvs) cvs.style.cursor = mode === 'hand' ? 'grab' : '';
+}
+
+function initMobileOptimizations() {
+  // Detect mobile device
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isTablet = window.innerWidth >= 481 && window.innerWidth <= 768;
+  const isPhone = window.innerWidth <= 480;
+  
+  // Add mobile class to body
+  if (isMobile || isPhone || isTablet) {
+    document.body.classList.add('is-mobile');
+    if (isPhone) document.body.classList.add('is-phone');
+    if (isTablet) document.body.classList.add('is-tablet');
+  }
+
+  // Prevent zoom on double-tap for buttons
+  document.querySelectorAll('.btn, .tb-btn, button').forEach(btn => {
+    let lastTap = 0;
+    btn.addEventListener('touchend', (e) => {
+      const curTime = new Date().getTime();
+      const tapLen = curTime - lastTap;
+      if (tapLen < 300 && tapLen > 0) {
+        e.preventDefault();
+      }
+      lastTap = curTime;
+    }, false);
+  });
+
+  // Close mobile library when tapping canvas wrapper
+  const cw = document.getElementById('canvasWrapper');
+  if (cw) {
+    cw.addEventListener('touchstart', () => {
+      closeMobileLibrary();
+      const menu = document.getElementById('mobileWorkspaceMenu');
+      if (menu) menu.classList.remove('show');
+    }, { passive: true });
+  }
+
+  // Close mobile menu when clicking on a page
+  document.querySelectorAll('.page').forEach(page => {
+    page.addEventListener('click', () => {
+      closeMobileMenu();
+    });
+  });
+
+  // Improve touch feedback on interactive elements
+  document.querySelectorAll('.comp-item, .circuit-card, .guide-card, .team-card').forEach(elem => {
+    elem.addEventListener('touchstart', function() {
+      this.style.opacity = '0.8';
+    });
+    elem.addEventListener('touchend', function() {
+      this.style.opacity = '1';
+    });
+  });
+
+  // Disable context menu on touch devices to avoid issues
+  if (isMobile) {
+    document.addEventListener('contextmenu', (e) => {
+      if (e.target && e.target.id !== 'mainCanvas') {
+        e.preventDefault();
+      }
+    }, false);
+  }
+
+  // Improve modal responsiveness on mobile
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        const modalId = overlay.id;
+        closeModal(modalId);
+      }
+    });
+  });
+
+  // Handle window resize for responsive adjustments
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      resizeCanvas();
+      redrawCanvas();
+      const modals = document.querySelectorAll('.modal-overlay.open');
+      modals.forEach(m => {
+        const modal = m.querySelector('.modal');
+        if (modal) {
+          modal.style.maxHeight = '90vh';
+        }
+      });
+    }, 100);
+  });
+
+  // Improve scrolling performance
+  const scrollArea = document.querySelector('.lib-body');
+  if (scrollArea) {
+    scrollArea.style.webkitOverflowScrolling = 'touch';
+  }
+  const propsBody = document.getElementById('propsBody');
+  if (propsBody) {
+    propsBody.style.webkitOverflowScrolling = 'touch';
+  }
+
+  // Prevent accidental pinch zoom on canvas
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 1) {
+      if (canvas && canvas.contains(e.target)) {
+        e.preventDefault();
+      }
+    }
+  }, { passive: false });
+
+  // Touch-friendly keyboard input handling
+  const textInputs = document.querySelectorAll('input[type="text"], textarea, .text-input');
+  textInputs.forEach(input => {
+    input.addEventListener('focus', () => {
+      // Scroll input into view
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+}
+
+// Track canvas dragging state
+let isCanvasDragging = false;
+const originalOnMouseDown = typeof onMouseDown !== 'undefined' ? onMouseDown : null;
+const originalOnMouseUp = typeof onMouseUp !== 'undefined' ? onMouseUp : null;
 
 /* =========================================================
    DIGISIM – Text Label Feature  (labels.js)
@@ -3690,6 +4254,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('propOutputRow').style.display = 'none';
     document.getElementById('propValueRow').style.display = 'none';
     document.getElementById('propRotateRow').style.display = 'none';
+    document.getElementById('propBitWidthRow').style.display = 'none'; // Fix: hide INPUT-specific rows
+    document.getElementById('propDisplayModeRow').style.display = 'none'; // Fix: hide INPUT-specific rows
     // Hide the generic label field (we use our own)
     const labelTextRow = document.getElementById('propLabelTextRow');
     if (labelTextRow) labelTextRow.style.display = 'none';
@@ -3710,6 +4276,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const boldIn = document.getElementById('propLabelBold');
     if (boldIn) boldIn.checked = !!selectedComp.labelBold;
+
+    // ── Mobile: show Properties button and sync modal for LABEL type ──
+    if (typeof _updateMobilePropsLabel === 'function') _updateMobilePropsLabel();
   };
 
   // Props panel update helpers called from HTML
@@ -3735,6 +4304,21 @@ document.addEventListener('DOMContentLoaded', () => {
     redrawCanvas();
   };
 
+  function _measureLabelEditorWidth(text, fontSize, bold) {
+    const span = document.createElement('span');
+    span.textContent = text || '';
+    span.style.position = 'absolute';
+    span.style.visibility = 'hidden';
+    span.style.whiteSpace = 'pre';
+    span.style.fontFamily = "'Share Tech Mono', monospace";
+    span.style.fontSize = fontSize + 'px';
+    span.style.fontWeight = bold ? 'bold' : 'normal';
+    document.body.appendChild(span);
+    const width = span.getBoundingClientRect().width;
+    document.body.removeChild(span);
+    return width;
+  }
+
   // ── Inline label text editor ─────────────────────────────────────
   function _showLabelEditor(comp) {
     editingLabel = comp;
@@ -3759,8 +4343,10 @@ document.addEventListener('DOMContentLoaded', () => {
     overlay.style.left = sp.x + 'px';
     overlay.style.top = (sp.y - 20) + 'px';
 
-    // Fit width to content
-    input.style.width = Math.max(80, (comp.labelText || '').length * 10 + 40) + 'px';
+    const fontSize = parseInt(input.style.fontSize, 10) || 14;
+    const isBold = input.style.fontWeight === 'bold';
+    const measured = _measureLabelEditorWidth(input.value, fontSize, isBold);
+    input.style.width = Math.max(80, Math.min(320, measured + 16)) + 'px';
 
     setTimeout(() => { input.focus(); input.select(); }, 30);
   }
@@ -3800,7 +4386,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('labelEditorInput');
     if (input) {
       setTimeout(() => {
-        input.style.width = Math.max(80, input.value.length * 10 + 40) + 'px';
+        input.style.width = 'auto';
+        const fontSize = parseInt(input.style.fontSize, 10) || 14;
+        const isBold = input.style.fontWeight === 'bold';
+        const measured = _measureLabelEditorWidth(input.value, fontSize, isBold);
+        input.style.width = Math.max(80, Math.min(320, measured + 16)) + 'px';
       }, 0);
     }
   };
@@ -3834,7 +4424,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // ── Label tool click → place new label ──────────────────────
+    // ── Label tool click → place new label (stays active for repeated placement) ──
     if (labelToolActive) {
       if (typeof simRunning !== 'undefined' && simRunning) return;
       const rect = canvas.getBoundingClientRect();
@@ -3845,9 +4435,12 @@ document.addEventListener('DOMContentLoaded', () => {
       groupSelected = [];
       updatePropsPanel();
       redrawCanvas();
-      _deactivateLabelTool();
-      // Open inline editor immediately
-      setTimeout(() => _showLabelEditor(comp), 60);
+      // Stay in label mode — do NOT deactivate. Open editor but keep cursor as text.
+      setTimeout(() => {
+        _showLabelEditor(comp);
+        // Restore cursor to text after editor opens (editor focus may reset it)
+        setTimeout(() => { if (labelToolActive && canvas) canvas.style.cursor = 'text'; }, 80);
+      }, 60);
       e.stopImmediatePropagation();
       return;
     }
@@ -3856,6 +4449,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Intercept double-click for editing existing labels ───────────
   function _labelDblClickHandler(e) {
     if (typeof drawingWire !== 'undefined' && drawingWire) return;
+    if (typeof simRunning !== 'undefined' && simRunning) return;
     const rect = canvas.getBoundingClientRect();
     const { x, y } = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
     const comp = _getLabelAt(x, y);
