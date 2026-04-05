@@ -305,6 +305,10 @@ const GRID = 10;
 const GATE_W = 80;
 const GATE_H = 60;
 
+function snapToGrid(val) {
+  return Math.round(val / GRID) * GRID;
+}
+
 function addComponent(type, x, y) {
   const id = 'G' + (++compCounter);
   const defaultInputs = type === 'NOT' ? 1 : (type === 'INPUT' || type === 'OUTPUT' ? (type === 'INPUT' ? 0 : 1) : 2);
@@ -319,7 +323,12 @@ function addComponent(type, x, y) {
     width: GATE_W,
     height: Math.max(GATE_H, bodyH + 20)
   };
-  if (type === 'INPUT') comp.value = 0;
+  if (type === 'INPUT') {
+    comp.value = 0;
+    comp.bitWidth = 1; // default
+    comp.bitValues = [0]; // array of bit values
+    comp.displayMode = 'decimal'; // 'decimal' or 'binary'
+  }
   components.push(comp);
   document.getElementById('canvasHint').style.display = 'none';
   redrawCanvas();
@@ -403,6 +412,23 @@ function getOutputPort(comp) {
   return { x: comp.x + rot.x, y: comp.y + rot.y };
 }
 
+function getOutputPortBit(comp, bitIndex) {
+  if (comp.type !== 'INPUT') return null;
+  const bitWidth = comp.bitWidth || 1;
+  const portSpacing = bitWidth > 1 ? 12 : 0;
+  const portY = (bitIndex - (bitWidth - 1) / 2) * portSpacing;
+  const rot = rotatePoint(30, portY, comp.rotation || 0);
+  return { x: comp.x + rot.x, y: comp.y + rot.y };
+}
+
+// Helper to get output port for wire operations (handles multi-bit inputs)
+function getWireStartOutputPort(comp, portIndex) {
+  if (comp.type === 'INPUT' && (comp.bitWidth || 1) >= 2) {
+    return getOutputPortBit(comp, portIndex);
+  }
+  return getOutputPort(comp);
+}
+
 function getCompBBox(comp, pad) {
   const size = Math.max(
     (comp.type === 'INPUT') ? 60 : (comp.type === 'OUTPUT') ? 44 : 80,
@@ -425,11 +451,26 @@ function getPortAt(wx, wy) {
   const threshold = PORT_HIT_RADIUS / viewScale;
   let best = null, bestDist = Infinity;
   for (const c of components) {
-    const op = getOutputPort(c);
-    if (op) {
-      const d = Math.hypot(wx-op.x, wy-op.y);
-      if (d < threshold && d < bestDist) { bestDist = d; best = { comp: c, portType: 'output', portIndex: 0, pt: op }; }
+    if (c.type === 'LABEL') continue;
+    
+    // Handle multiple output ports for multi-bit INPUT
+    if (c.type === 'INPUT') {
+      const bitWidth = c.bitWidth || 1;
+      for (let b = 0; b < bitWidth; b++) {
+        const op = getOutputPortBit(c, b);
+        if (op) {
+          const d = Math.hypot(wx-op.x, wy-op.y);
+          if (d < threshold && d < bestDist) { bestDist = d; best = { comp: c, portType: 'output', portIndex: b, pt: op }; }
+        }
+      }
+    } else {
+      const op = getOutputPort(c);
+      if (op) {
+        const d = Math.hypot(wx-op.x, wy-op.y);
+        if (d < threshold && d < bestDist) { bestDist = d; best = { comp: c, portType: 'output', portIndex: 0, pt: op }; }
+      }
     }
+    
     for (let i = 0; i < c.inputs; i++) {
       const ip = getInputPort(c, i);
       if (ip) {
@@ -456,6 +497,7 @@ function getSnapTarget(wx, wy, startPort) {
   let best = null, bestDist = Infinity;
 
   for (const c of components) {
+    if (c.type === 'LABEL') continue;
     if (startPort) {
       if (startPort.portType === 'output') {
         if (c.id === startPort.comp.id) continue;
@@ -467,15 +509,39 @@ function getSnapTarget(wx, wy, startPort) {
         }
       } else {
         if (c.id === startPort.comp.id) continue;
-        const op = getOutputPort(c);
-        if (op) {
-          const d = Math.hypot(wx - op.x, wy - op.y);
-          if (d < threshold && d < bestDist) { bestDist = d; best = { comp: c, portType: 'output', portIndex: 0, pt: op }; }
+        // Handle multiple output ports for multi-bit INPUT
+        if (c.type === 'INPUT') {
+          const bitWidth = c.bitWidth || 1;
+          for (let b = 0; b < bitWidth; b++) {
+            const op = getOutputPortBit(c, b);
+            if (op) {
+              const d = Math.hypot(wx - op.x, wy - op.y);
+              if (d < threshold && d < bestDist) { bestDist = d; best = { comp: c, portType: 'output', portIndex: b, pt: op }; }
+            }
+          }
+        } else {
+          const op = getOutputPort(c);
+          if (op) {
+            const d = Math.hypot(wx - op.x, wy - op.y);
+            if (d < threshold && d < bestDist) { bestDist = d; best = { comp: c, portType: 'output', portIndex: 0, pt: op }; }
+          }
         }
       }
     } else {
-      const op = getOutputPort(c);
-      if (op) { const d = Math.hypot(wx-op.x, wy-op.y); if (d < threshold && d < bestDist) { bestDist=d; best={comp:c,portType:'output',portIndex:0,pt:op}; } }
+      // Handle multiple output ports for multi-bit INPUT
+      if (c.type === 'INPUT') {
+        const bitWidth = c.bitWidth || 1;
+        for (let b = 0; b < bitWidth; b++) {
+          const op = getOutputPortBit(c, b);
+          if (op) {
+            const d = Math.hypot(wx-op.x, wy-op.y);
+            if (d < threshold && d < bestDist) { bestDist=d; best={comp:c,portType:'output',portIndex:b,pt:op}; }
+          }
+        }
+      } else {
+        const op = getOutputPort(c);
+        if (op) { const d = Math.hypot(wx-op.x, wy-op.y); if (d < threshold && d < bestDist) { bestDist=d; best={comp:c,portType:'output',portIndex:0,pt:op}; } }
+      }
       for (let i = 0; i < c.inputs; i++) {
         const ip = getInputPort(c, i);
         if (!ip) continue;
@@ -543,7 +609,7 @@ function onMouseDown(e) {
     const lastPt = wireCorners.length > 0
       ? wireCorners[wireCorners.length - 1]
       : (wireStartPort.portType === 'output'
-          ? getOutputPort(wireStartPort.comp)
+          ? getWireStartOutputPort(wireStartPort.comp, wireStartPort.portIndex)
           : getInputPort(wireStartPort.comp, wireStartPort.portIndex));
 
     // Use the same orthogonal routing the preview shows so the placed
@@ -579,7 +645,8 @@ function onMouseDown(e) {
         wires.splice(existingIdx, 1);
         const srcComp = detached.fromComp ? components.find(c => c.id === detached.fromComp) : null;
         if (srcComp) {
-          startWire({ comp: srcComp, portType: 'output', portIndex: 0, pt: getOutputPort(srcComp) }, x, y);
+          const portIdx = detached.fromPort || 0;
+          startWire({ comp: srcComp, portType: 'output', portIndex: portIdx, pt: getWireStartOutputPort(srcComp, portIdx) }, x, y);
         } else {
           startWire(portHit, x, y);
         }
@@ -699,7 +766,7 @@ function finishWire(targetPort) {
   }
 
   saveState();
-  const from = getOutputPort(fromPort.comp);
+  const from = getWireStartOutputPort(fromPort.comp, fromPort.portIndex);
   const to = getInputPort(toPort.comp, toPort.portIndex);
   const excludeIds = new Set([fromPort.comp.id, toPort.comp.id]);
 
@@ -713,7 +780,7 @@ function finishWire(targetPort) {
     finalCorners = from && to ? computeSmartCorners(from, to, excludeIds) : [];
   }
 
-  wires.push({ fromComp: fromPort.comp.id, fromNode: null, toComp: toPort.comp.id, toPort: toPort.portIndex, corners: finalCorners });
+  wires.push({ fromComp: fromPort.comp.id, fromPort: fromPort.portIndex || 0, fromNode: null, toComp: toPort.comp.id, toPort: toPort.portIndex, corners: finalCorners });
 
   showToast('Connected!', 'success');
   cancelWire();
@@ -730,6 +797,8 @@ window.addEventListener('keydown', e => {
     if (drawingWire) { cancelWire(); return; }
     if (selectedWire) { selectedWire = null; redrawCanvas(); return; }
     exitGroupSelect();
+    // Deactivate temp label if active
+    if (typeof window._stopTempLabel !== 'undefined' && window.isTempLabelActive()) { window._stopTempLabel(); return; }
   }
   if ((e.key === 'Delete' || e.key === 'Backspace') && !['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) {
     e.preventDefault();
@@ -762,6 +831,24 @@ window.addEventListener('keydown', e => {
     }
     if (selectedComp) {
       rotateComponent(selectedComp, 90); return;
+    }
+  }
+  if (e.ctrlKey && e.key === 'a') {
+    if (!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) {
+      e.preventDefault();
+      selectAllCanvasComponents();
+    }
+  }
+  if (e.ctrlKey && e.key === 'c') {
+    if (!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) {
+      e.preventDefault();
+      copySelected();
+    }
+  }
+  if (e.ctrlKey && e.key === 'v') {
+    if (!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) {
+      e.preventDefault();
+      pasteClipboard();
     }
   }
   if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undoAction(); }
@@ -961,12 +1048,20 @@ function onMouseUp(e) {
 function onDblClick(e) {
   const { x, y } = getWorldPos(e);
   if (drawingWire) { cancelWire(); return; }
+
   const comp = getCompAt(x, y);
 
-  // INPUT toggle is the ONLY thing allowed during simulation (via dblclick)
+  // INPUT handling
   if (comp && comp.type === 'INPUT') {
+    // Multi-bit input (2-4 bits): open configuration modal
+    if ((comp.bitWidth || 1) >= 2) {
+      openInputBitConfigModal(comp);
+      return;
+    }
+    // Single-bit input: toggle value
     saveState();
     comp.value = comp.value ? 0 : 1;
+    comp.bitValues = [comp.value];
     if (simRunning) propagate();
     updatePropsPanel(); redrawCanvas();
     return;
@@ -1196,7 +1291,7 @@ function getWirePointsForWire(wire) {
     if (n) fromPt = { x: n.x, y: n.y };
   } else if (wire.fromComp) {
     const from = components.find(c => c.id === wire.fromComp);
-    if (from) fromPt = getOutputPort(from);
+    if (from) fromPt = getWireStartOutputPort(from, wire.fromPort || 0);
   }
   if (wire.toNode) {
     const n = nodes.find(nd => nd.id === wire.toNode);
@@ -1218,7 +1313,7 @@ function rerouteWire(wire) {
     if (n) fromPt = { x: n.x, y: n.y };
   } else if (wire.fromComp) {
     const fc = components.find(c => c.id === wire.fromComp);
-    if (fc) fromPt = getOutputPort(fc);
+    if (fc) fromPt = getWireStartOutputPort(fc, wire.fromPort || 0);
   }
   if (wire.toNode) {
     const n = nodes.find(nd => nd.id === wire.toNode);
@@ -1290,7 +1385,7 @@ function redrawCanvas() {
 
   if (drawingWire && wireStartPort && wireLiveEnd) {
     const startPt = wireStartPort.portType === 'output'
-      ? getOutputPort(wireStartPort.comp)
+      ? getWireStartOutputPort(wireStartPort.comp, wireStartPort.portIndex)
       : getInputPort(wireStartPort.comp, wireStartPort.portIndex);
 
     if (startPt) {
@@ -1363,6 +1458,11 @@ function redrawCanvas() {
 
   for (const comp of components) drawComponent(comp);
 
+  // Draw temporary label if active
+  if (tempLabelActive) {
+    _drawTempLabel();
+  }
+
   if (hoveredPort && !simRunning) {
     const pt = hoveredPort.pt;
     ctx.save();
@@ -1430,7 +1530,10 @@ function drawWire(wire) {
   let active = false;
   if (simRunning && wire.fromComp) {
     const from = components.find(c => c.id === wire.fromComp);
-    active = from ? from.value === 1 : false;
+    if (from) {
+      // For multi-bit INPUTs, use the specific bit value; otherwise use overall value
+      active = getComponentOutputValue(from, wire.fromPort) === 1;
+    }
   }
   const isSelected = (wire === selectedWire);
   const isBeingDragged = draggingWireSegment && draggingWireSegment.wire === wire;
@@ -1569,30 +1672,76 @@ function drawInputSwitch(comp, selected) {
   ctx.save(); ctx.translate(comp.x, comp.y);
   if (comp.rotation) ctx.rotate(comp.rotation * Math.PI / 180);
   const on = comp.value === 1;
+  const bitWidth = comp.bitWidth || 1;
   ctx.fillStyle = on ? 'rgba(0,229,160,0.15)' : 'rgba(30,45,74,0.5)';
   ctx.strokeStyle = on ? '#00e5a0' : '#4a9eff';
   ctx.lineWidth=1.5;
   roundRect(ctx,-w/2,-h/2,w,h,6); ctx.fill(); ctx.stroke();
   ctx.font='bold 13px Share Tech Mono'; ctx.fillStyle = on ? '#00e5a0' : '#94a3b8';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(on?'1':'0', 0, 0);
-  const isOutHovered = !simRunning && hoveredPort && hoveredPort.comp.id === comp.id && hoveredPort.portType === 'output';
-  if (isOutHovered) { ctx.shadowColor = '#00e5a0'; ctx.shadowBlur = 10; }
-  ctx.beginPath(); ctx.arc(w/2,0, isOutHovered ? 7 : 5, 0,Math.PI*2);
-  ctx.fillStyle='#0d1117'; ctx.strokeStyle = (on || isOutHovered) ? '#00e5a0' : '#4a9eff';
-  ctx.lineWidth = isOutHovered ? 2.5 : 1.5; ctx.fill(); ctx.stroke();
-  ctx.shadowBlur = 0;
+  // For multi-bit inputs (2+), display based on displayMode; otherwise display 1/0
+  let displayValue;
+  if (bitWidth >= 2) {
+    const mode = comp.displayMode || 'decimal';
+    if (mode === 'binary') {
+      displayValue = (comp.value || 0).toString(2).padStart(bitWidth, '0');
+    } else {
+      displayValue = String(comp.value || 0);
+    }
+  } else {
+    displayValue = on ? '1' : '0';
+  }
+  ctx.fillText(displayValue, 0, 0);
+  ctx.restore();
+  
+  // Draw output ports (one per bit)
+  for (let b = 0; b < bitWidth; b++) {
+    ctx.save();
+    ctx.translate(comp.x, comp.y);
+    if (comp.rotation) ctx.rotate(comp.rotation * Math.PI / 180);
+    
+    // Multiple ports spaced vertically
+    const portSpacing = bitWidth > 1 ? 12 : 0;
+    const portY = (b - (bitWidth - 1) / 2) * portSpacing;
+    
+    const isOutHovered = !simRunning && hoveredPort && hoveredPort.comp.id === comp.id 
+                         && hoveredPort.portType === 'output' && hoveredPort.portIndex === b;
+    if (isOutHovered) { ctx.shadowColor = '#00e5a0'; ctx.shadowBlur = 10; }
+    
+    ctx.beginPath(); 
+    ctx.arc(w/2, portY, isOutHovered ? 7 : 5, 0, Math.PI*2);
+    const bitValue = (comp.bitValues && comp.bitValues[b]) || ((comp.value >>> b) & 1);
+    ctx.fillStyle='#0d1117'; 
+    ctx.strokeStyle = (bitValue || isOutHovered) ? '#00e5a0' : '#4a9eff';
+    ctx.lineWidth = isOutHovered ? 2.5 : 1.5; 
+    ctx.fill(); ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    ctx.restore();
+  }
+  
+  ctx.save(); ctx.translate(comp.x, comp.y);
+  if (comp.rotation) ctx.rotate(comp.rotation * Math.PI / 180);
   if (selected) {
     ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
     ctx.strokeRect(-w/2-6,-h/2-6,w+12,h+12); ctx.setLineDash([]);
   }
   ctx.restore();
+  
   ctx.save(); ctx.translate(comp.x, comp.y);
   ctx.font='9px Share Tech Mono'; ctx.fillStyle='#4a5568'; ctx.textBaseline='alphabetic'; ctx.textAlign='center';
   ctx.fillText(comp.label||comp.id, 0, h/2+12);
   if (comp.rotation) { ctx.font = 'bold 9px Share Tech Mono'; ctx.fillStyle='#60a5fa'; ctx.fillText(comp.rotation+'°', 0, h/2+22); }
   ctx.restore();
+  
+  ctx.save(); ctx.translate(comp.x, comp.y);
+  ctx.fillStyle = '#3b82f6';
+  ctx.font = '10px Rajdhani';
+  ctx.textAlign = 'center';
+  ctx.fillText(bitWidth + '-bit', 0, h/2+24);
+  ctx.restore();
 }
+
 
 function drawOutputLED(comp, selected) {
   const r=22;
@@ -1646,6 +1795,8 @@ function toggleSimulation() {
     draggingComp = null; draggingWireSegment = null; groupDragging = false;
     groupSelecting = false;
     if (drawingWire) cancelWire();
+    // Deactivate temp label if active
+    if (typeof window._stopTempLabel !== 'undefined') window._stopTempLabel();
     canvas.style.cursor = 'not-allowed';
     updatePropsPanel();
     propagate();
@@ -1659,6 +1810,18 @@ function toggleSimulation() {
   }
   redrawCanvas();
 }
+// Helper: Get output value from a component, considering multi-bit INPUTs
+function getComponentOutputValue(comp, fromPort) {
+  if (!comp) return 0;
+  // For multi-bit INPUTs, return the specific bit value
+  if (comp.type === 'INPUT' && (comp.bitWidth || 1) >= 2) {
+    const bitIdx = fromPort || 0;
+    return (comp.bitValues && comp.bitValues[bitIdx]) ? 1 : 0;
+  }
+  // For single-bit INPUTs and all other components, return overall value
+  return comp.value ? 1 : 0;
+}
+
 function propagate() {
   for (let pass = 0; pass < 20; pass++) {  // more passes to let feedback settle
     for (const comp of components) { if (comp.type !== 'INPUT') evalComponent(comp); }
@@ -1669,7 +1832,7 @@ function evalComponent(comp) {
     const inWire = wires.find(w => w.toComp === comp.id && w.toPort === 0);
     if (inWire) {
       const src = inWire.fromComp ? components.find(c => c.id === inWire.fromComp) : null;
-      comp.value = src ? src.value : 0;
+      comp.value = src ? getComponentOutputValue(src, inWire.fromPort) : 0;
     }
     return;
   }
@@ -1678,7 +1841,10 @@ function evalComponent(comp) {
     const w = wires.find(w2 => w2.toComp === comp.id && w2.toPort === i);
     if (w) {
       let val = 0;
-      if (w.fromComp) { const src = components.find(c => c.id === w.fromComp); val = src ? src.value : 0; }
+      if (w.fromComp) {
+        const src = components.find(c => c.id === w.fromComp);
+        val = src ? getComponentOutputValue(src, w.fromPort) : 0;
+      }
       else if (w.fromNode) { val = getNodeValue(w.fromNode); }
       inputVals.push(val);
     } else { inputVals.push(0); }
@@ -1732,13 +1898,13 @@ function updatePropsPanel() {
   document.getElementById('propType').textContent = selectedComp.type;
 
   const inputsRow = document.getElementById('propInputsRow');
-  inputsRow.style.display = (selectedComp.type!=='INPUT'&&selectedComp.type!=='OUTPUT'&&selectedComp.type!=='NOT') ? '' : 'none';
+  inputsRow.style.display = (selectedComp.type!=='INPUT'&&selectedComp.type!=='OUTPUT'&&selectedComp.type!=='NOT'&&selectedComp.type!=='LABEL') ? '' : 'none';
   const propInputsEl = document.getElementById('propInputs');
   propInputsEl.value = selectedComp.inputs;
   propInputsEl.max = 10;
 
   const outRow = document.getElementById('propOutputRow');
-  outRow.style.display = selectedComp.type !== 'INPUT' ? '' : 'none';
+  outRow.style.display = (selectedComp.type !== 'INPUT' && selectedComp.type !== 'LABEL') ? '' : 'none';
   const outBadge = document.getElementById('propOutput');
   outBadge.textContent = selectedComp.value + (selectedComp.value ? ' (HIGH)' : ' (LOW)');
   outBadge.style.color = selectedComp.value ? 'var(--accent)' : 'var(--danger)';
@@ -1748,6 +1914,28 @@ function updatePropsPanel() {
   const tog = document.getElementById('propToggle');
   tog.textContent = selectedComp.value ? '1 (HIGH)' : '0 (LOW)';
   tog.className = 'toggle-btn ' + (selectedComp.value ? 'high' : 'low');
+
+  const bitWidthRow = document.getElementById('propBitWidthRow');
+  if (bitWidthRow) {
+    if (selectedComp.type === 'INPUT') {
+      bitWidthRow.style.display = '';
+      const bitWidthSel = document.getElementById('propBitWidth');
+      if (bitWidthSel) bitWidthSel.value = String(selectedComp.bitWidth || 1);
+    } else {
+      bitWidthRow.style.display = 'none';
+    }
+  }
+
+  const displayModeRow = document.getElementById('propDisplayModeRow');
+  if (displayModeRow) {
+    if (selectedComp.type === 'INPUT' && (selectedComp.bitWidth || 1) >= 2) {
+      displayModeRow.style.display = '';
+      const displayModeSel = document.getElementById('propDisplayMode');
+      if (displayModeSel) displayModeSel.value = selectedComp.displayMode || 'decimal';
+    } else {
+      displayModeRow.style.display = 'none';
+    }
+  }
 
   const rotRow = document.getElementById('propRotateRow');
   if (rotRow) {
@@ -1786,7 +1974,90 @@ function toggleInputValue() {
   if (simRunning) propagate(); updatePropsPanel(); redrawCanvas();
 }
 
-// ── FIX #1: DELETE WITH COUNTER ROLLBACK ──────────────────────────
+// ── MULTI-BIT INPUT CONFIGURATION ──────────────────────────────────
+let _multiBitInputComp = null; // Reference to the INPUT comp being configured
+
+function updateInputBitWidth() {
+  if (!selectedComp || selectedComp.type !== 'INPUT') return;
+  const newWidth = parseInt(document.getElementById('propBitWidth').value, 10) || 1;
+  if (newWidth === selectedComp.bitWidth) return;
+  saveState();
+  selectedComp.bitWidth = newWidth;
+  // Initialize bitValues array with 0s
+  selectedComp.bitValues = Array(newWidth).fill(0);
+  selectedComp.value = 0;
+  updatePropsPanel();
+  redrawCanvas();
+}
+
+function updateInputDisplayMode() {
+  if (!selectedComp || selectedComp.type !== 'INPUT') return;
+  const newMode = document.getElementById('propDisplayMode').value;
+  selectedComp.displayMode = newMode;
+  redrawCanvas();
+}
+
+function openInputBitConfigModal(comp) {
+  _multiBitInputComp = comp;
+  const container = document.getElementById('bitConfigContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  const bitWidth = comp.bitWidth || 1;
+  if (!comp.bitValues) comp.bitValues = Array(bitWidth).fill(0);
+  
+  for (let i = 0; i < bitWidth; i++) {
+    const bitValue = comp.bitValues[i] || 0;
+    const bitLabel = document.createElement('div');
+    bitLabel.style.display = 'flex';
+    bitLabel.style.alignItems = 'center';
+    bitLabel.style.gap = '12px';
+    bitLabel.style.padding = '10px';
+    bitLabel.style.background = 'rgba(0,229,160,0.08)';
+    bitLabel.style.borderRadius = '4px';
+    
+    const label = document.createElement('span');
+    label.style.fontFamily = 'var(--font-mono)';
+    label.style.color = 'var(--text-secondary)';
+    label.style.minWidth = '60px';
+    label.textContent = `Bit ${i}:`;
+    
+    const btn = document.createElement('button');
+    btn.className = 'toggle-btn ' + (bitValue ? 'high' : 'low');
+    btn.textContent = bitValue ? '1 (HIGH)' : '0 (LOW)';
+    btn.style.flex = '1';
+    btn.style.cursor = 'pointer';
+    btn.onclick = () => {
+      if (!_multiBitInputComp.bitValues) _multiBitInputComp.bitValues = [];
+      _multiBitInputComp.bitValues[i] = _multiBitInputComp.bitValues[i] ? 0 : 1;
+      btn.textContent = _multiBitInputComp.bitValues[i] ? '1 (HIGH)' : '0 (LOW)';
+      btn.className = 'toggle-btn ' + (_multiBitInputComp.bitValues[i] ? 'high' : 'low');
+    };
+    
+    bitLabel.appendChild(label);
+    bitLabel.appendChild(btn);
+    container.appendChild(bitLabel);
+  }
+  
+  openModal('multiBitInputModal');
+}
+
+function commitMultiBitInputConfig() {
+  if (!_multiBitInputComp) return;
+  saveState();
+  // Calculate combined value from bits (LSB at index 0)
+  let value = 0;
+  for (let i = 0; i < _multiBitInputComp.bitValues.length; i++) {
+    if (_multiBitInputComp.bitValues[i]) {
+      value |= (1 << i);
+    }
+  }
+  _multiBitInputComp.value = value;
+  if (simRunning) propagate();
+  closeModal('multiBitInputModal');
+  updatePropsPanel();
+  redrawCanvas();
+}
 function deleteSelected() {
   if (simRunning) { showToast('🔒 Stop simulation before deleting', 'error'); return; }
   if (!selectedComp) return;
@@ -1802,6 +2073,13 @@ function deleteSelected() {
 // ── GROUP SELECT ─────────────────────────────────────────────────
 function toggleGroupSelect() {
   showToast('Drag on empty canvas to lasso-select. Press R to rotate group. Right-click for more options.', 'info');
+}
+function selectAllCanvasComponents() {
+  if (!components.length) return;
+  selectedComp = null;
+  groupSelected = components.map(c => c.id);
+  updatePropsPanel();
+  redrawCanvas();
 }
 function exitGroupSelect() {
   groupSelected = []; groupSelecting = false;
@@ -1823,6 +2101,91 @@ function deleteGroupSelected() {
   syncCompCounter();
   updatePropsPanel(); redrawCanvas();
   showToast('Group deleted', 'info');
+}
+
+// ── CLIPBOARD (Copy/Paste) ────────────────────────────────────────
+let _clipboard = null;
+
+function copySelected() {
+  // Determine what to copy: single component, group, or nothing
+  let toCopy = [];
+  if (groupSelected.length > 0) {
+    toCopy = groupSelected.map(id => components.find(c => c.id === id)).filter(Boolean);
+  } else if (selectedComp) {
+    toCopy = [selectedComp];
+  } else {
+    showToast('Nothing selected to copy', 'info');
+    return;
+  }
+  
+  // Deep clone components
+  _clipboard = toCopy.map(comp => ({
+    type: comp.type,
+    x: comp.x,
+    y: comp.y,
+    inputs: comp.inputs,
+    inputValues: comp.inputValues ? [...comp.inputValues] : [],
+    value: comp.value,
+    label: comp.label,
+    rotation: comp.rotation || 0,
+    width: comp.width,
+    height: comp.height,
+    // Multi-bit INPUT properties
+    bitWidth: comp.bitWidth,
+    bitValues: comp.bitValues ? [...comp.bitValues] : undefined,
+    displayMode: comp.displayMode
+  }));
+  
+  showToast(`Copied ${toCopy.length} component${toCopy.length !== 1 ? 's' : ''}`, 'info');
+}
+
+function pasteClipboard() {
+  if (!_clipboard || _clipboard.length === 0) {
+    showToast('Nothing to paste', 'info');
+    return;
+  }
+  
+  saveState();
+  
+  const pastedIds = [];
+  const offsetX = 30;
+  const offsetY = 30;
+  
+  for (const compData of _clipboard) {
+    const id = 'G' + (++compCounter);
+    const newComp = {
+      id,
+      type: compData.type,
+      x: compData.x + offsetX,
+      y: compData.y + offsetY,
+      inputs: compData.inputs,
+      inputValues: [...(compData.inputValues || [])],
+      value: compData.value,
+      label: compData.label,
+      rotation: compData.rotation || 0,
+      width: compData.width,
+      height: compData.height
+    };
+    
+    // Copy multi-bit INPUT properties if present
+    if (compData.bitWidth !== undefined) {
+      newComp.bitWidth = compData.bitWidth;
+      newComp.bitValues = [...(compData.bitValues || [])];
+      newComp.displayMode = compData.displayMode || 'decimal';
+    }
+    
+    components.push(newComp);
+    pastedIds.push(id);
+  }
+  
+  // Update selection to pasted components
+  selectedComp = null;
+  selectedWire = null;
+  groupSelected = pastedIds;
+  
+  updatePropsPanel();
+  redrawCanvas();
+  showToast(`Pasted ${pastedIds.length} component${pastedIds.length !== 1 ? 's' : ''}`, 'info');
 }
 
 // ── TOOLBAR ACTIONS ─────────────────────────────────────────────
@@ -3077,3 +3440,535 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+/* =========================================================
+   DIGISIM – Text Label Feature  (labels.js)
+   Loaded AFTER script.js. Patches the existing engine to
+   support LABEL-type "components" that render as styled
+   text annotations on the canvas.
+   =========================================================
+   Design rules
+   ─────────────
+   • LABEL objects live in the `components` array alongside
+     gates, just with type === 'LABEL'.
+   • They have no ports (getInputPort / getOutputPort return
+     null for them already because of the existing guard
+     `if (comp.type === 'OUTPUT') return null` style checks —
+     LABEL falls through to the same result since getPortAt
+     can't find a match).
+   • All existing undo/redo, save/load, group-select, drag,
+     clear, and delete logic works automatically because it
+     operates on `components` generically.
+   • We PATCH (wrap) the three functions that draw on the
+     canvas so labels are rendered there:
+       – drawComponent()
+       – updatePropsPanel()
+       – addComponent()   (to set sensible defaults)
+   • We also intercept keyboard 'T' to activate the label
+     tool, and double-click to open the inline editor.
+   ========================================================= */
+
+(function () {
+  'use strict';
+
+  // ── Label tool state ────────────────────────────────────────────
+  let labelToolActive = false;
+  let editingLabel = null;   // reference to the label comp being edited
+  let tempLabelActive = false; // temporary label following cursor
+  let tempLabelX = 0, tempLabelY = 0;
+  window.tempLabelActive = tempLabelActive; // make it accessible globally
+
+  // ── Activate / deactivate the label placement tool ──────────────
+  window.activateLabelTool = function () {
+    if (typeof simRunning !== 'undefined' && simRunning) {
+      showToast('🔒 Stop simulation before placing labels', 'error');
+      return;
+    }
+    // If temporary label is active, deactivate it first
+    if (tempLabelActive) {
+      _stopTempLabel();
+    }
+    labelToolActive = !labelToolActive;
+    const btn = document.getElementById('labelToolBtn');
+    if (btn) {
+      if (labelToolActive) {
+        btn.classList.add('tb-active-label');
+        btn.style.borderColor = '#00e5a0';
+        btn.style.color = '#00e5a0';
+        btn.style.background = 'rgba(0,229,160,0.12)';
+        if (canvas) canvas.style.cursor = 'text';
+        showToast('Label tool active — click anywhere on canvas to place a label. Press T or Esc to cancel.', 'info');
+      } else {
+        _deactivateLabelTool();
+      }
+    }
+  };
+
+  function _deactivateLabelTool() {
+    labelToolActive = false;
+    const btn = document.getElementById('labelToolBtn');
+    if (btn) {
+      btn.classList.remove('tb-active-label');
+      btn.style.borderColor = '';
+      btn.style.color = '';
+      btn.style.background = '';
+    }
+    if (canvas) canvas.style.cursor = '';
+  }
+
+  // ── Temporary label mode (when label tool is off, press T) ──────
+  function _startTempLabel() {
+    if (tempLabelActive) return;
+    tempLabelActive = true;
+    tempLabelX = mouseX || 0;
+    tempLabelY = mouseY || 0;
+    if (canvas) canvas.style.cursor = 'text';
+    showToast('Label mode: Click to place label, or press T/Esc to cancel.', 'info');
+    redrawCanvas();
+  }
+
+  function _stopTempLabel() {
+    if (!tempLabelActive) return;
+    tempLabelActive = false;
+    if (canvas) canvas.style.cursor = '';
+    redrawCanvas();
+  }
+  window._stopTempLabel = _stopTempLabel;
+  window.isTempLabelActive = function() { return tempLabelActive; };
+
+  // ── Patch addComponent to supply LABEL defaults ──────────────────
+  const _origAddComponent = window.addComponent;
+  window.addComponent = function (type, x, y) {
+    if (type !== 'LABEL') return _origAddComponent(type, x, y);
+    // Build a minimal LABEL object
+    const id = 'G' + (++compCounter);
+    const comp = {
+      id,
+      type: 'LABEL',
+      x, y,
+      inputs: 0,
+      inputValues: [],
+      value: 0,
+      label: id,
+      rotation: 0,
+      width: 120,
+      height: 24,
+      // Label-specific fields
+      labelText: 'Label',
+      labelSize: 14,
+      labelColor: '#00e5a0',
+      labelBold: false,
+    };
+    components.push(comp);
+    document.getElementById('canvasHint').style.display = 'none';
+    redrawCanvas();
+    return comp;
+  };
+
+  // ── Patch drawComponent to render LABEL type ─────────────────────
+  const _origDrawComponent = window.drawComponent;
+  window.drawComponent = function (comp) {
+    if (comp.type !== 'LABEL') return _origDrawComponent(comp);
+    _drawLabelComponent(comp);
+  };
+
+  function _drawLabelComponent(comp) {
+    const isSelected = (selectedComp && selectedComp.id === comp.id);
+    const isGroupSel = groupSelected && groupSelected.includes(comp.id);
+    const text = comp.labelText || 'Label';
+    const size = comp.labelSize || 14;
+    const color = comp.labelColor || '#00e5a0';
+    const bold = comp.labelBold || false;
+
+    ctx.save();
+    ctx.translate(comp.x, comp.y);
+    if (comp.rotation) ctx.rotate(comp.rotation * Math.PI / 180);
+
+    // Measure text for hit area and selection box
+    ctx.font = (bold ? 'bold ' : '') + size + 'px Share Tech Mono, monospace';
+    const metrics = ctx.measureText(text);
+    const tw = metrics.width;
+    const th = size;
+
+    // Update stored dimensions so drag/hit detection stays accurate
+    comp.width = tw + 16;
+    comp.height = th + 10;
+
+    // Selection / hover highlight
+    if (isSelected || isGroupSel) {
+      ctx.fillStyle = 'rgba(59,130,246,0.08)';
+      ctx.strokeStyle = isSelected ? '#3b82f6' : 'rgba(59,130,246,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      const pad = 6;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(-pad, -th / 2 - pad, tw + pad * 2, th + pad * 2, 4)
+                    : ctx.rect(-pad, -th / 2 - pad, tw + pad * 2, th + pad * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Text shadow / glow when selected
+    if (isSelected) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+    }
+
+    // Draw the text
+    ctx.font = (bold ? 'bold ' : '') + size + 'px Share Tech Mono, monospace';
+    ctx.fillStyle = color;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillText(text, 0, 0);
+
+    ctx.restore();
+  }
+
+  function _drawTempLabel() {
+    const text = 'Label';
+    const size = 14;
+    const color = '#00e5a0';
+    const bold = false;
+
+    ctx.save();
+    ctx.translate(tempLabelX, tempLabelY);
+
+    // Measure text
+    ctx.font = (bold ? 'bold ' : '') + size + 'px Share Tech Mono, monospace';
+    const metrics = ctx.measureText(text);
+    const tw = metrics.width;
+    const th = size;
+
+    // Semi-transparent background
+    ctx.fillStyle = 'rgba(0,229,160,0.1)';
+    ctx.strokeStyle = 'rgba(0,229,160,0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    const pad = 6;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(-pad, -th / 2 - pad, tw + pad * 2, th + pad * 2, 4)
+                  : ctx.rect(-pad, -th / 2 - pad, tw + pad * 2, th + pad * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw the text
+    ctx.font = (bold ? 'bold ' : '') + size + 'px Share Tech Mono, monospace';
+    ctx.fillStyle = color;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillText(text, 0, 0);
+
+    ctx.restore();
+  }
+
+  // ── Patch updatePropsPanel to handle LABEL type ──────────────────
+  const _origUpdatePropsPanel = window.updatePropsPanel;
+  window.updatePropsPanel = function () {
+    if (!selectedComp || selectedComp.type !== 'LABEL') {
+      // Hide label section when not selected
+      const sec = document.getElementById('propLabelSection');
+      if (sec) sec.style.display = 'none';
+      const row = document.getElementById('propLabelTextRow');
+      if (row) row.style.display = '';
+      return _origUpdatePropsPanel();
+    }
+
+    // Show common skeleton
+    const noSel = document.getElementById('noSelection');
+    const selProps = document.getElementById('selectionProps');
+    noSel.style.display = 'none';
+    selProps.style.display = '';
+
+    document.getElementById('propTitle').textContent = 'Text Label';
+    document.getElementById('propId').textContent = selectedComp.id;
+    document.getElementById('propType').textContent = 'LABEL';
+
+    // Hide gate-specific rows
+    document.getElementById('propInputsRow').style.display = 'none';
+    document.getElementById('propOutputRow').style.display = 'none';
+    document.getElementById('propValueRow').style.display = 'none';
+    document.getElementById('propRotateRow').style.display = 'none';
+    // Hide the generic label field (we use our own)
+    const labelTextRow = document.getElementById('propLabelTextRow');
+    if (labelTextRow) labelTextRow.style.display = 'none';
+
+    // Show label-specific section
+    const sec = document.getElementById('propLabelSection');
+    if (sec) sec.style.display = '';
+
+    // Populate label fields
+    const textIn = document.getElementById('propLabelText');
+    if (textIn) textIn.value = selectedComp.labelText || '';
+
+    const sizeIn = document.getElementById('propLabelSize');
+    if (sizeIn) sizeIn.value = String(selectedComp.labelSize || 14);
+
+    const colorIn = document.getElementById('propLabelColor');
+    if (colorIn) colorIn.value = selectedComp.labelColor || '#00e5a0';
+
+    const boldIn = document.getElementById('propLabelBold');
+    if (boldIn) boldIn.checked = !!selectedComp.labelBold;
+  };
+
+  // Props panel update helpers called from HTML
+  window.updateCanvasLabelText = function () {
+    if (!selectedComp || selectedComp.type !== 'LABEL') return;
+    const v = document.getElementById('propLabelText').value;
+    selectedComp.labelText = v;
+    redrawCanvas();
+  };
+  window.updateCanvasLabelSize = function () {
+    if (!selectedComp || selectedComp.type !== 'LABEL') return;
+    selectedComp.labelSize = parseInt(document.getElementById('propLabelSize').value, 10) || 14;
+    redrawCanvas();
+  };
+  window.updateCanvasLabelColor = function () {
+    if (!selectedComp || selectedComp.type !== 'LABEL') return;
+    selectedComp.labelColor = document.getElementById('propLabelColor').value;
+    redrawCanvas();
+  };
+  window.updateCanvasLabelBold = function () {
+    if (!selectedComp || selectedComp.type !== 'LABEL') return;
+    selectedComp.labelBold = document.getElementById('propLabelBold').checked;
+    redrawCanvas();
+  };
+
+  // ── Inline label text editor ─────────────────────────────────────
+  function _showLabelEditor(comp) {
+    editingLabel = comp;
+    const overlay = document.getElementById('labelEditorOverlay');
+    const input = document.getElementById('labelEditorInput');
+    if (!overlay || !input) return;
+
+    // Position the editor over the label in screen space
+    const wrapper = document.getElementById('canvasWrapper');
+    const wRect = wrapper.getBoundingClientRect();
+    const sp = worldToScreen(comp.x, comp.y);
+    const scale = viewScale;
+
+    input.style.fontSize = Math.max(12, (comp.labelSize || 14) * scale) + 'px';
+    input.style.fontWeight = comp.labelBold ? 'bold' : 'normal';
+    input.style.color = comp.labelColor || '#00e5a0';
+    input.style.borderColor = comp.labelColor || '#00e5a0';
+    input.style.boxShadow = '0 0 12px ' + (comp.labelColor || '#00e5a0') + '44';
+    input.value = comp.labelText || '';
+
+    overlay.style.display = 'block';
+    overlay.style.left = sp.x + 'px';
+    overlay.style.top = (sp.y - 20) + 'px';
+
+    // Fit width to content
+    input.style.width = Math.max(80, (comp.labelText || '').length * 10 + 40) + 'px';
+
+    setTimeout(() => { input.focus(); input.select(); }, 30);
+  }
+
+  function _hideLabelEditor() {
+    const overlay = document.getElementById('labelEditorOverlay');
+    if (overlay) overlay.style.display = 'none';
+    editingLabel = null;
+  }
+
+  window.commitLabelEdit = function () {
+    if (!editingLabel) return;
+    const input = document.getElementById('labelEditorInput');
+    const newText = input ? input.value : '';
+    if (newText.trim() === '' && editingLabel.labelText === 'Label') {
+      // User blanked a brand-new label — delete it
+      saveState();
+      components = components.filter(c => c.id !== editingLabel.id);
+      selectedComp = null;
+      syncCompCounter();
+      updatePropsPanel();
+    } else {
+      saveState();
+      editingLabel.labelText = newText || editingLabel.labelText;
+      // Sync props panel text field
+      const t = document.getElementById('propLabelText');
+      if (t) t.value = editingLabel.labelText;
+    }
+    _hideLabelEditor();
+    redrawCanvas();
+  };
+
+  window.onLabelEditorKey = function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); commitLabelEdit(); }
+    if (e.key === 'Escape') { e.preventDefault(); commitLabelEdit(); }
+    // Resize input dynamically
+    const input = document.getElementById('labelEditorInput');
+    if (input) {
+      setTimeout(() => {
+        input.style.width = Math.max(80, input.value.length * 10 + 40) + 'px';
+      }, 0);
+    }
+  };
+
+  window.beginEditSelectedLabel = function () {
+    if (!selectedComp || selectedComp.type !== 'LABEL') return;
+    _showLabelEditor(selectedComp);
+  };
+
+  // ── Intercept canvas mousedown for label tool placement ──────────
+  // We wrap the existing onMouseDown by listening on the same canvas
+  // with capture so we can intercept BEFORE the existing handler.
+  // Actually the cleanest approach: patch the existing handler by
+  // installing a pre-handler on the canvas at capture phase.
+  function _labelPreHandler(e) {
+    if (e.button !== 0) return;
+
+    // ── Temporary label placement ────────────────────────────────
+    if (tempLabelActive) {
+      if (typeof simRunning !== 'undefined' && simRunning) return;
+      saveState();
+      const comp = addComponent('LABEL', tempLabelX, tempLabelY);
+      selectedComp = comp;
+      groupSelected = [];
+      updatePropsPanel();
+      redrawCanvas();
+      _stopTempLabel();
+      // Open inline editor immediately
+      setTimeout(() => _showLabelEditor(comp), 60);
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    // ── Label tool click → place new label ──────────────────────
+    if (labelToolActive) {
+      if (typeof simRunning !== 'undefined' && simRunning) return;
+      const rect = canvas.getBoundingClientRect();
+      const { x, y } = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+      saveState();
+      const comp = addComponent('LABEL', x, y);
+      selectedComp = comp;
+      groupSelected = [];
+      updatePropsPanel();
+      redrawCanvas();
+      _deactivateLabelTool();
+      // Open inline editor immediately
+      setTimeout(() => _showLabelEditor(comp), 60);
+      e.stopImmediatePropagation();
+      return;
+    }
+  }
+
+  // ── Intercept double-click for editing existing labels ───────────
+  function _labelDblClickHandler(e) {
+    if (typeof drawingWire !== 'undefined' && drawingWire) return;
+    const rect = canvas.getBoundingClientRect();
+    const { x, y } = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const comp = _getLabelAt(x, y);
+    if (comp) {
+      selectedComp = comp;
+      groupSelected = [];
+      updatePropsPanel();
+      redrawCanvas();
+      _showLabelEditor(comp);
+      e.stopImmediatePropagation();
+    }
+  }
+
+  function _getLabelAt(wx, wy) {
+    for (let i = components.length - 1; i >= 0; i--) {
+      const c = components[i];
+      if (c.type !== 'LABEL') continue;
+      const hw = (c.width || 120) / 2 + 8;
+      const hh = (c.height || 24) / 2 + 8;
+      if (wx >= c.x - 6 && wx <= c.x + hw + 6 && wy >= c.y - hh && wy <= c.y + hh) return c;
+    }
+    return null;
+  }
+
+  // ── Keyboard shortcut T to activate/deactivate label tool ────────
+  // Wrap the existing keydown handler via addEventListener at capture.
+  function _labelKeyHandler(e) {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+    if (e.key === 'T' || e.key === 't') {
+      if (typeof simRunning !== 'undefined' && simRunning) return;
+      e.preventDefault();
+      if (labelToolActive) {
+        // If label tool is active, deactivate it
+        activateLabelTool();
+      } else {
+        // If label tool is inactive, start temporary label mode
+        _startTempLabel();
+      }
+    }
+    if (e.key === 'Escape' && (labelToolActive || tempLabelActive)) {
+      _deactivateLabelTool();
+      _stopTempLabel();
+      if (canvas) canvas.style.cursor = '';
+    }
+  }
+
+  // ── Wire the handlers once the DOM/canvas are ready ─────────────
+  function _hookHandlers() {
+    if (!canvas) {
+      setTimeout(_hookHandlers, 100);
+      return;
+    }
+    canvas.addEventListener('mousedown', _labelPreHandler, true);
+    canvas.addEventListener('dblclick', _labelDblClickHandler, true);
+    window.addEventListener('keydown', _labelKeyHandler, true);
+
+    // Patch drag-drop so LABEL type dropped onto canvas works
+    const _origOnDrop = window.onDrop;
+    // onDrop is an anonymous function assigned to the canvas event listener
+    // — we just need dragGate to set dragGateType correctly, which it already does.
+    // addComponent is already patched above.
+
+    // Also patch getCompBBox so LABEL comps have proper hit boxes
+    const _origGetCompBBox = window.getCompBBox;
+    window.getCompBBox = function (comp, pad) {
+      if (comp.type !== 'LABEL') return _origGetCompBBox(comp, pad);
+      const hw = (comp.width || 120) / 2 + (pad || 0);
+      const hh = (comp.height || 24) / 2 + (pad || 0);
+      return { x1: comp.x - 6, y1: comp.y - hh, x2: comp.x + comp.width + 6, y2: comp.y + hh };
+    };
+
+    // Patch getInputPort / getOutputPort to hard-return null for LABELs
+    // (they already do for INPUT/OUTPUT via early returns, but LABEL falls
+    //  through to the gate path which could crash)
+    const _origGetInputPort = window.getInputPort;
+    window.getInputPort = function (comp, i) {
+      if (comp.type === 'LABEL') return null;
+      return _origGetInputPort(comp, i);
+    };
+    const _origGetOutputPort = window.getOutputPort;
+    window.getOutputPort = function (comp) {
+      if (comp.type === 'LABEL') return null;
+      return _origGetOutputPort(comp);
+    };
+
+    // Patch evalComponent to skip LABELs during simulation
+    const _origEvalComponent = window.evalComponent;
+    window.evalComponent = function (comp) {
+      if (comp.type === 'LABEL') return;
+      return _origEvalComponent(comp);
+    };
+  }
+
+  // Cursor hint while label tool is active and hovering over canvas
+  function _labelMouseMoveHint(e) {
+    if (labelToolActive || tempLabelActive) {
+      if (canvas) canvas.style.cursor = 'text';
+    }
+    if (tempLabelActive) {
+      const rect = canvas.getBoundingClientRect();
+      const { x, y } = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+      tempLabelX = x;
+      tempLabelY = y;
+      redrawCanvas();
+    }
+  }
+
+  // Start hooking after a small delay to ensure script.js has fully run
+  setTimeout(() => {
+    _hookHandlers();
+    if (canvas) {
+      canvas.addEventListener('mousemove', _labelMouseMoveHint, false);
+    }
+  }, 200);
+
+})();
