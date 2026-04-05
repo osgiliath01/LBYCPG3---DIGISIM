@@ -16,7 +16,7 @@
 <nav class="navbar" id="navbar">
   <div class="nav-brand">
     <span class="brand-text">DIGI<span class="brand-accent">SIM</span></span>
-    <span class="brand-tag">v2.4</span>
+    <span class="brand-tag">v2.5</span>
   </div>
   <div class="nav-links" id="navLinks">
     <a href="#home" class="nav-link active" onclick="showPage('home',this)"><i class="fa fa-home"></i> HOME</a>
@@ -104,7 +104,7 @@
       <aside class="component-library" id="compLib">
         <div class="lib-header">
           <span class="lib-header-label">COMPONENT LIBRARY</span>
-          <button class="lib-toggle" onclick="toggleLibrary()" title="Collapse library"><i class="fa fa-bars"></i></button>
+          <button class="lib-toggle" id="libToggleBtn" onclick="toggleLibrary()" title="Collapse library"><i class="fa fa-bars"></i></button>
         </div>
         <div class="lib-body" id="libBody">
           <div class="lib-section-label">LOGIC GATES</div>
@@ -180,10 +180,10 @@
           </div>
         </div>
       </aside>
-      <button class="lib-show-btn" id="libShowBtn" onclick="toggleLibrary()" title="Show Component Library" style="display:none">
-        <i class="fa fa-bars"></i>
-      </button>
     </div>
+    <button class="lib-show-btn" id="libShowBtn" onclick="toggleLibrary()" title="Open Component Library">
+      <i class="fa fa-chevron-right"></i>
+    </button>
 
     <!-- MAIN CANVAS AREA -->
     <div class="canvas-area">
@@ -218,27 +218,29 @@
           <span id="fileIndicatorName">Untitled.json</span>
         </span>
       </div>
-
       <div class="canvas-wrapper" id="canvasWrapper">
         <canvas id="mainCanvas"></canvas>
+
         <div class="canvas-hint" id="canvasHint">
           <i class="fa fa-arrow-left"></i> Drag components from the library<br/>
           or click components above to add them here
         </div>
+
         <div class="wire-status" id="wireStatus" style="display:none">
           <i class="fa fa-project-diagram"></i>
           Routing wire — <b>click</b> canvas to add corner &nbsp;|&nbsp;
           <kbd>Backspace</kbd> undo corner &nbsp;|&nbsp;
           <kbd>Esc</kbd> cancel
         </div>
+
         <!-- Inline label editor overlay -->
         <div id="labelEditorOverlay" style="display:none;position:absolute;z-index:50;pointer-events:none;">
           <input id="labelEditorInput" type="text" autocomplete="off" spellcheck="false"
             style="pointer-events:all;background:rgba(17,24,39,0.95);border:1.5px solid #00e5a0;
                    color:#00e5a0;font-family:'Share Tech Mono',monospace;font-size:14px;
-                   padding:5px 10px;border-radius:5px;outline:none;min-width:80px;max-width:320px;
-                   box-shadow:0 0 12px rgba(0,229,160,0.3);"
-            onblur="commitLabelEdit()" onkeydown="onLabelEditorKey(event)"/>
+                   padding:5px 6px;box-sizing:border-box;border-radius:5px;outline:none;min-width:80px;max-width:320px;
+                   box-shadow:0 0 12px rgba(0,229,160,0.3);transition:width 0.08s ease;"
+            onblur="commitLabelEdit()" oninput="onLabelEditorInput(event)" onkeydown="onLabelEditorKey(event)"/>
         </div>
       </div>
     </div>
@@ -292,6 +294,12 @@
                 <option value="decimal">Decimal</option>
                 <option value="binary">Binary</option>
               </select>
+            </div>
+            <div class="prop-row" id="propBitDetailsRow" style="display:none">
+              <span>Bits</span>
+              <div id="propBitDetails" style="display:flex;flex-direction:column;gap:2px;font-family:var(--font-mono);font-size:10px;">
+                <!-- Bit details will be populated here -->
+              </div>
             </div>
             <!-- Rotation row in properties panel -->
             <div class="prop-row" id="propRotateRow">
@@ -363,6 +371,112 @@
     </div>
   </div>
 </section>
+
+<!-- ============================================================ PROPERTIES MODAL -->
+<div class="modal-overlay" id="propsModal" onclick="if(event.target === this) closeModal('propsModal')">
+  <div class="modal" style="max-width: 360px">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border);background:var(--bg-panel)">
+      <span style="font-family:var(--font-display);font-weight:700;letter-spacing:1.5px;color:var(--text-primary);font-size:12px">PROPERTIES</span>
+      <button onclick="closeModal('propsModal')" title="Close properties" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="props-body" id="propsBodyModal" style="padding:20px;max-height:60vh;overflow-y:auto">
+      <div class="no-selection" id="noSelectionModal" style="text-align:center;padding:40px 20px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);line-height:2"><i class="fa fa-mouse-pointer"></i><br/>Select a component</div>
+      <div class="selection-props" id="selectionPropsModal" style="display:none;">
+        <div class="prop-title" id="propTitleModal">AND Gate</div>
+        <div class="prop-row"><span>ID</span><span id="propIdModal" class="prop-val">—</span></div>
+        <div class="prop-row"><span>Type</span><span id="propTypeModal" class="prop-val">—</span></div>
+        <div class="prop-row" id="propInputsRowModal">
+          <span>Inputs</span>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" id="propInputsModal" min="2" max="10" value="2"
+              style="width:52px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;"
+              onchange="updateInputCount()"/>
+          </div>
+        </div>
+        <div class="prop-row" id="propOutputRowModal">
+          <span>Output</span>
+          <span id="propOutputModal" class="prop-val out-badge">—</span>
+        </div>
+        <div class="prop-row" id="propValueRowModal" style="display:none">
+          <span>Value</span>
+          <button class="toggle-btn" id="propToggleModal" onclick="toggleInputValue()">0 (LOW)</button>
+        </div>
+        <div class="prop-row" id="propBitWidthRowModal" style="display:none">
+          <span>Bit Width</span>
+          <select id="propBitWidthModal" onchange="updateInputBitWidth()"
+            style="width:52px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;">
+            <option value="1">1-bit</option>
+            <option value="2">2-bit</option>
+            <option value="3">3-bit</option>
+            <option value="4">4-bit</option>
+          </select>
+        </div>
+        <div class="prop-row" id="propDisplayModeRowModal" style="display:none">
+          <span>Display</span>
+          <select id="propDisplayModeModal" onchange="updateInputDisplayMode()"
+            style="width:70px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;">
+            <option value="decimal">Decimal</option>
+            <option value="binary">Binary</option>
+          </select>
+        </div>
+        <div class="prop-row" id="propBitDetailsRowModal" style="display:none">
+          <span>Bits</span>
+          <div id="propBitDetailsModal" style="display:flex;flex-direction:column;gap:2px;font-family:var(--font-mono);font-size:10px;">
+            <!-- Bit details will be populated here -->
+          </div>
+        </div>
+        <div class="prop-row" id="propRotateRowModal">
+          <span>Rotation</span>
+          <div class="rotation-controls">
+            <span id="propRotationModal" class="prop-val">0°</span>
+            <button onclick="if(selectedComp)rotateComponent(selectedComp,90)" title="Rotate 90° clockwise">
+              <i class="fa fa-redo"></i>
+            </button>
+            <button onclick="if(selectedComp)rotateComponent(selectedComp,270)" title="Rotate 90° counter-clockwise">
+              <i class="fa fa-undo"></i>
+            </button>
+          </div>
+        </div>
+        <div class="prop-row" id="propLabelTextRowModal">
+          <span>Label</span>
+          <input type="text" id="propLabelModal" placeholder="label"
+            style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:8px 10px;border-radius:6px;"
+            oninput="updateLabel()"/>
+        </div>
+        <div class="prop-row" id="propLabelSizeRowModal" style="display:none">
+          <span>Size</span>
+          <select id="propLabelSizeModal" onchange="updateCanvasLabelSize()"
+            style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:8px 10px;border-radius:6px;">
+            <option value="10">XS</option>
+            <option value="12">S</option>
+            <option value="14">M</option>
+            <option value="18">L</option>
+            <option value="24">XL</option>
+            <option value="32">2XL</option>
+          </select>
+        </div>
+        <div class="prop-row" id="propLabelColorRowModal" style="display:none">
+          <span>Color</span>
+          <select id="propLabelColorModal" onchange="updateCanvasLabelColor()"
+            style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:8px 10px;border-radius:6px;">
+            <option value="#00e5a0">Green</option>
+            <option value="#4a9eff">Blue</option>
+            <option value="#f59e0b">Amber</option>
+            <option value="#ef4444">Red</option>
+            <option value="#a855f7">Purple</option>
+            <option value="#e2e8f0">White</option>
+            <option value="#94a3b8">Gray</option>
+          </select>
+        </div>
+        <div class="prop-row" id="propLabelBoldRowModal" style="display:none">
+          <span>Bold</span>
+          <input type="checkbox" id="propLabelBoldModal" onchange="updateCanvasLabelBold()"
+            style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer;"/>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ============================================================ DIRECTORY PAGE -->
 <section class="page" id="page-directory">
@@ -447,25 +561,29 @@
     <p class="about-sub">LBYCPG3 — Group 3 · BS Computer Engineering · Section E25<br/>De La Salle University — Gokongwei College of Engineering</p>
     <div class="team-grid">
       <div class="team-card">
-        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#0f3460,#1a5276);border:2px solid #3b82f6;">
+        <img src="images/liam.jpg" alt="GO, Martin Liam K." class="team-photo" style="border:2px solid #3b82f6;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#0f3460,#1a5276);border:2px solid #3b82f6;display:none;">
           <span class="team-initials">MLG</span>
         </div>
         <h3>GO, Martin Liam K.</h3><p>12319570</p><span class="team-badge">BS-CpE / E25</span>
       </div>
       <div class="team-card">
-        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#0d3b2e,#1a6b52);border:2px solid #00e5a0;">
+        <img src="images/luigi.jpg" alt="SEÑGA, Rommel Luigi M." class="team-photo" style="border:2px solid #00e5a0;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#0d3b2e,#1a6b52);border:2px solid #00e5a0;display:none;">
           <span class="team-initials">RLS</span>
         </div>
         <h3>SEÑGA, Rommel Luigi M.</h3><p>12341673</p><span class="team-badge">BS-CpE / E25</span>
       </div>
       <div class="team-card">
-        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#3b1f6b,#6d28d9);border:2px solid #a855f7;">
+        <img src="images/mizi.jpg" alt="SOTELO, Mitzen Mae L." class="team-photo" style="border:2px solid #a855f7;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#3b1f6b,#6d28d9);border:2px solid #a855f7;display:none;">
           <span class="team-initials">MMS</span>
         </div>
         <h3>SOTELO, Mitzen Mae L.</h3><p>12370878</p><span class="team-badge">BS-CpE / E25</span>
       </div>
       <div class="team-card">
-        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#4a1a0a,#b45309);border:2px solid #f59e0b;">
+        <img src="images/abel.jpg" alt="TRISTAN, Aaron Abel N." class="team-photo" style="border:2px solid #f59e0b;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#4a1a0a,#b45309);border:2px solid #f59e0b;display:none;">
           <span class="team-initials">AAN</span>
         </div>
         <h3>TRISTAN, Aaron Abel N.</h3><p>12335126</p><span class="team-badge">BS-CpE / E25</span>
@@ -667,6 +785,50 @@
 </div>
 
 <!-- TOAST -->
+
+<!-- ============================================================ MOBILE OVERLAY UI (outside canvasWrapper so touches work) -->
+<div id="propsLabel" style="position:fixed;display:none;z-index:1200;background:var(--accent);color:var(--bg-deep);padding:6px 10px;border-radius:4px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;box-shadow:0 4px 12px rgba(0,229,160,0.3);white-space:nowrap;" onclick="if(typeof simRunning!=='undefined'&&simRunning){return;}openModal('propsModal');event.stopPropagation()">Properties</div>
+<div class="mobile-sim-status" id="mobileSimStatus" style="display:none">● IDLE</div>
+<div class="mobile-workspace-control" id="mobileWorkspaceControl">
+  <button class="mobile-workspace-btn" id="mobileWorkspaceBtn" onclick="toggleWorkspaceMenu()" title="Workspace menu"><i class="fa fa-ellipsis-v"></i></button>
+  <div class="mobile-workspace-menu" id="mobileWorkspaceMenu">
+    <button class="mobile-menu-item" onclick="newCircuit(); toggleWorkspaceMenu();">NEW</button>
+    <button class="mobile-menu-item" onclick="saveCircuit(); toggleWorkspaceMenu();">SAVE</button>
+    <button class="mobile-menu-item" onclick="exportCircuit(); toggleWorkspaceMenu();">EXPORT</button>
+    <button class="mobile-menu-item" onclick="importCircuit(); toggleWorkspaceMenu();">IMPORT</button>
+    <button class="mobile-menu-item" onclick="openAnalysis(); toggleWorkspaceMenu();">ANALYZE</button>
+    <button class="mobile-menu-item" onclick="openKmap(); toggleWorkspaceMenu();">K-MAP</button>
+    <button class="mobile-menu-item" onclick="openAICompanion(); toggleWorkspaceMenu();">AI GUIDE</button>
+  </div>
+</div>
+<div class="mobile-action-bar" id="mobileActionBar">
+  <button class="mobile-action-btn" onclick="undoAction()" title="Undo"><i class="fa fa-undo"></i></button>
+  <button class="mobile-action-btn" onclick="redoAction()" title="Redo"><i class="fa fa-redo"></i></button>
+  <button class="mobile-action-btn" id="mobileSimBtn" onclick="toggleSimulation()" title="Start/Stop Simulation"><i class="fa fa-play"></i></button>
+</div>
+<div class="mobile-mode-switcher" id="mobileModeSwitcher">
+  <button class="mobile-mode-btn active" id="selectModeBtn" onclick="setMobileCanvasMode('select')" title="Select mode"><i class="fa fa-mouse-pointer"></i></button>
+  <button class="mobile-mode-btn" id="handModeBtn" onclick="setMobileCanvasMode('hand')" title="Hand mode"><i class="fa fa-hand-paper"></i></button>
+</div>
+
+
+<!-- ============================================================ GENERIC CONFIRM MODAL -->
+<div class="modal-overlay" id="confirmModal" onclick="event.stopPropagation()">
+  <div class="modal modal-sm" onclick="event.stopPropagation()" style="max-width:380px">
+    <div class="modal-header">
+      <span id="confirmModalTitle"><i class="fa fa-exclamation-triangle" style="color:var(--warn);margin-right:8px"></i>CONFIRM</span>
+      <button class="modal-close" onclick="_confirmModalCancel()"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px 8px">
+      <p id="confirmModalMsg" style="font-family:var(--font-mono);font-size:13px;color:var(--text-secondary);line-height:1.7;margin:0"></p>
+    </div>
+    <div class="modal-footer" style="padding:16px 24px 20px;gap:10px">
+      <button class="btn btn-primary" id="confirmModalOk" onclick="_confirmModalOk()"><i class="fa fa-check"></i> OK</button>
+      <button class="btn btn-outline" onclick="_confirmModalCancel()"><i class="fa fa-times"></i> Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="script.js"></script>
