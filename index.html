@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <!-- IC Chip Favicon (SVG inline as data URI) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111827'/%3E%3Crect x='18' y='18' width='28' height='28' rx='3' fill='%231a2540' stroke='%2300e5a0' stroke-width='2'/%3E%3Crect x='22' y='22' width='20' height='20' rx='2' fill='%230d1117' stroke='%2300e5a0' stroke-width='1'/%3E%3Cline x1='22' y1='28' x2='18' y2='28' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='22' y1='32' x2='18' y2='32' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='22' y1='36' x2='18' y2='36' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='42' y1='28' x2='46' y2='28' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='42' y1='32' x2='46' y2='32' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='42' y1='36' x2='46' y2='36' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='28' y1='22' x2='28' y2='18' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='32' y1='22' x2='32' y2='18' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='36' y1='22' x2='36' y2='18' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='28' y1='42' x2='28' y2='46' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='32' y1='42' x2='32' y2='46' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='36' y1='42' x2='36' y2='46' stroke='%2300e5a0' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%2300e5a0' opacity='0.9'/%3E%3C/svg%3E"/>
 </head>
 <body>
 
@@ -147,6 +149,13 @@
               <span>OUTPUT</span>
             </div>
           </div>
+          <div class="lib-section-label">ANNOTATIONS</div>
+          <div class="lib-grid" style="grid-template-columns:1fr;">
+            <div class="comp-item" draggable="true" data-type="LABEL" title="Text Label — drag or click to place" ondragstart="dragGate(event,'LABEL')">
+              <div class="comp-io-icon io-label" style="width:52px;height:32px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.35);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:bold;color:#00e5a0;letter-spacing:1px;">T</div>
+              <span>LABEL</span>
+            </div>
+          </div>
           <div class="lib-hint">
             <i class="fa fa-info-circle"></i> Drag to canvas or click to add
           </div>
@@ -163,7 +172,11 @@
             Group select → press <kbd style="background:#1f2d4a;border:1px solid #2e4070;border-radius:2px;padding:0 3px;font-size:8px">R</kbd> to rotate all<br/><br/>
             <i class="fa fa-object-group" style="color:#4a9eff"></i> <b style="color:#4a9eff">Group select:</b><br/>
             Drag on empty canvas to lasso<br/>
-            Right-click group for options
+            Right-click group for options<br/><br/>
+            <i class="fa fa-font" style="color:#00e5a0"></i> <b style="color:#00e5a0">Labels:</b><br/>
+            Click LABEL or press <kbd style="background:#1f2d4a;border:1px solid #2e4070;border-radius:2px;padding:0 3px;font-size:8px">T</kbd><br/>
+            Double-click label to edit<br/>
+            Select → Delete to remove
           </div>
         </div>
       </aside>
@@ -184,6 +197,7 @@
         <button class="tb-btn" onclick="clearCanvas()" title="Clear canvas"><i class="fa fa-trash"></i> CLEAR</button>
         <div class="tb-sep"></div>
         <button class="tb-btn tb-group" id="groupSelBtn" onclick="toggleGroupSelect()" title="Lasso-select: drag on empty canvas. Right-click selection for options."><i class="fa fa-object-group"></i> GROUP</button>
+        <button class="tb-btn tb-label" id="labelToolBtn" onclick="activateLabelTool()" title="Text Label tool — click canvas to place a label (T)"><i class="fa fa-font"></i> LABEL</button>
         <div class="tb-sep"></div>
         <button class="tb-btn tb-analyze" onclick="openAnalysis()" title="Analyze Circuit"><i class="fa fa-table"></i> ANALYZE</button>
         <button class="tb-btn tb-kmap" onclick="openKmap()" title="K-Map Simplifier"><i class="fa fa-map"></i> K-MAP</button>
@@ -216,6 +230,15 @@
           Routing wire — <b>click</b> canvas to add corner &nbsp;|&nbsp;
           <kbd>Backspace</kbd> undo corner &nbsp;|&nbsp;
           <kbd>Esc</kbd> cancel
+        </div>
+        <!-- Inline label editor overlay -->
+        <div id="labelEditorOverlay" style="display:none;position:absolute;z-index:50;pointer-events:none;">
+          <input id="labelEditorInput" type="text" autocomplete="off" spellcheck="false"
+            style="pointer-events:all;background:rgba(17,24,39,0.95);border:1.5px solid #00e5a0;
+                   color:#00e5a0;font-family:'Share Tech Mono',monospace;font-size:14px;
+                   padding:5px 10px;border-radius:5px;outline:none;min-width:80px;max-width:320px;
+                   box-shadow:0 0 12px rgba(0,229,160,0.3);"
+            onblur="commitLabelEdit()" onkeydown="onLabelEditorKey(event)"/>
         </div>
       </div>
     </div>
@@ -252,6 +275,24 @@
               <span>Value</span>
               <button class="toggle-btn" id="propToggle" onclick="toggleInputValue()">0 (LOW)</button>
             </div>
+            <div class="prop-row" id="propBitWidthRow" style="display:none">
+              <span>Bit Width</span>
+              <select id="propBitWidth" onchange="updateInputBitWidth()"
+                style="width:52px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;">
+                <option value="1">1-bit</option>
+                <option value="2">2-bit</option>
+                <option value="3">3-bit</option>
+                <option value="4">4-bit</option>
+              </select>
+            </div>
+            <div class="prop-row" id="propDisplayModeRow" style="display:none">
+              <span>Display</span>
+              <select id="propDisplayMode" onchange="updateInputDisplayMode()"
+                style="width:70px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;">
+                <option value="decimal">Decimal</option>
+                <option value="binary">Binary</option>
+              </select>
+            </div>
             <!-- Rotation row in properties panel -->
             <div class="prop-row" id="propRotateRow">
               <span>Rotation</span>
@@ -267,11 +308,52 @@
                 </button>
               </div>
             </div>
-            <div class="prop-row">
+            <!-- Label text prop row — hidden for LABEL type (has its own inline editor) -->
+            <div class="prop-row" id="propLabelTextRow">
               <span>Label</span>
               <input type="text" id="propLabel" placeholder="label"
                 style="width:80px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;"
                 oninput="updateLabel()"/>
+            </div>
+            <!-- LABEL-specific properties (shown only when a LABEL is selected) -->
+            <div id="propLabelSection" style="display:none">
+              <div class="prop-row">
+                <span>Text</span>
+                <input type="text" id="propLabelText" placeholder="label text"
+                  style="width:80px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 6px;border-radius:3px;"
+                  oninput="updateCanvasLabelText()"/>
+              </div>
+              <div class="prop-row">
+                <span>Size</span>
+                <select id="propLabelSize" onchange="updateCanvasLabelSize()"
+                  style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 4px;border-radius:3px;">
+                  <option value="10">XS</option>
+                  <option value="12">S</option>
+                  <option value="14" selected>M</option>
+                  <option value="18">L</option>
+                  <option value="24">XL</option>
+                  <option value="32">2XL</option>
+                </select>
+              </div>
+              <div class="prop-row">
+                <span>Color</span>
+                <select id="propLabelColor" onchange="updateCanvasLabelColor()"
+                  style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:3px 4px;border-radius:3px;">
+                  <option value="#00e5a0">Green</option>
+                  <option value="#4a9eff">Blue</option>
+                  <option value="#f59e0b">Amber</option>
+                  <option value="#ef4444">Red</option>
+                  <option value="#a855f7">Purple</option>
+                  <option value="#e2e8f0">White</option>
+                  <option value="#94a3b8">Gray</option>
+                </select>
+              </div>
+              <div class="prop-row">
+                <span>Bold</span>
+                <input type="checkbox" id="propLabelBold" onchange="updateCanvasLabelBold()"
+                  style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer;"/>
+              </div>
+              <button class="btn btn-sm" style="width:100%;justify-content:center;border-color:var(--accent);color:var(--accent);background:transparent;margin-top:8px;" onclick="beginEditSelectedLabel()"><i class="fa fa-pencil-alt"></i> Edit Text</button>
             </div>
             <button class="btn btn-danger btn-sm mt-8" onclick="deleteSelected()"><i class="fa fa-trash"></i> Delete</button>
             <button class="btn btn-sm mt-8" style="border-color:var(--accent2);color:var(--accent2);background:transparent;width:100%" onclick="deleteGroupSelected()"><i class="fa fa-object-group"></i> Del Group</button>
@@ -565,10 +647,30 @@
   </div>
 </div>
 
+<!-- ============================================================ MULTI-BIT INPUT CONFIGURATION MODAL -->
+<div class="modal-overlay" id="multiBitInputModal" onclick="closeModal('multiBitInputModal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span><i class="fa fa-sliders"></i> Configure Input Bits</span>
+      <button class="modal-close" onclick="closeModal('multiBitInputModal')"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="modal-body" style="padding:20px;">
+      <div id="bitConfigContainer" style="display:flex;flex-direction:column;gap:12px;">
+        <!-- Bit toggles will be inserted here -->
+      </div>
+      <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="closeModal('multiBitInputModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="commitMultiBitInputConfig()">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <script src="script.js"></script>
+<script src="labels.js"></script>
 
 <!-- Wire routing status updater -->
 <script>
