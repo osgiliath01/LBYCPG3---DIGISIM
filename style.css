@@ -548,3 +548,54 @@ canvas { outline: none; }
   color: var(--text-secondary);
   letter-spacing: 0.3px;
 }
+
+/* =========================================================
+   DIGISIM – Text Label Tool Additions  (append to style.css)
+   ========================================================= */
+
+/* Toolbar LABEL button */
+.tb-label {
+  border-color: #4a6080;
+  color: #8fa8cc;
+}
+.tb-label:hover {
+  background: rgba(0,229,160,0.08) !important;
+  border-color: #00e5a0 !important;
+  color: #00e5a0 !important;
+}
+.tb-active-label {
+  background: rgba(0,229,160,0.12) !important;
+  border-color: #00e5a0 !important;
+  color: #00e5a0 !important;
+}
+
+/* Inline label editor overlay — sits inside canvas-wrapper */
+#labelEditorOverlay {
+  position: absolute;
+  z-index: 50;
+  pointer-events: none;
+}
+#labelEditorInput {
+  pointer-events: all;
+  background: rgba(17,24,39,0.96);
+  border: 1.5px solid #00e5a0;
+  color: #00e5a0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  outline: none;
+  min-width: 80px;
+  max-width: 320px;
+  box-shadow: 0 0 16px rgba(0,229,160,0.3);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#labelEditorInput:focus {
+  box-shadow: 0 0 24px rgba(0,229,160,0.45);
+}
+
+/* Props panel label section spacing */
+#propLabelSection .btn {
+  font-size: 10px;
+  padding: 5px 10px;
+}
