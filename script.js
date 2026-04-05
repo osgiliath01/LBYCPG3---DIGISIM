@@ -2995,7 +2995,7 @@ function renderDirectory() {
         }
       </div>
       <div class="circuit-info">
-        <span class="circuit-name">${c.name}</span>
+        <span class="circuit-name" title="Click to rename" onclick="event.stopPropagation();beginRenameCircuit(${i},this)">${c.name}</span>
         <div class="circuit-actions">
           <button class="circuit-icon-btn" title="Load" onclick="event.stopPropagation();loadCircuit(${i})"><i class="fa fa-folder-open"></i></button>
           <button class="circuit-icon-btn" title="Export" onclick="event.stopPropagation();exportSaved(${i})"><i class="fa fa-download"></i></button>
@@ -3011,6 +3011,55 @@ function renderDirectory() {
     }
   });
 }
+function beginRenameCircuit(i, spanEl) {
+  const saved = JSON.parse(localStorage.getItem('digisim_circuits') || '[]');
+  if (!saved[i]) return;
+  const oldName = saved[i].name;
+
+  // Replace span with an inline input
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldName;
+  input.className = 'circuit-name-input';
+  input.style.cssText = 'font-family:var(--font-mono);font-size:12px;color:var(--text-primary);background:var(--bg-dark);border:1px solid var(--accent);border-radius:3px;padding:1px 6px;width:100%;outline:none;flex:1;';
+  spanEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  function commit() {
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) {
+      // Check uniqueness (exclude current)
+      const others = saved.filter((_,j) => j !== i).map(c => c.name);
+      let finalName = newName;
+      if (others.includes(finalName)) {
+        let n = 1;
+        while (others.includes(finalName + ' (' + n + ')')) n++;
+        finalName = finalName + ' (' + n + ')';
+      }
+      saved[i].name = finalName;
+      localStorage.setItem('digisim_circuits', JSON.stringify(saved));
+      // If this is the currently open circuit, update currentCircuitName too
+      if (typeof currentCircuitName !== 'undefined' && currentCircuitName === oldName) {
+        currentCircuitName = finalName;
+        updateFileIndicator();
+      }
+      showToast('Renamed to "' + finalName + '"', 'success');
+    }
+    renderDirectory();
+  }
+
+  function cancel() {
+    renderDirectory();
+  }
+
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.removeEventListener('blur', commit); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); input.removeEventListener('blur', commit); cancel(); }
+  });
+}
+
 function renderMiniCircuit(canvas2d, comps, wrs) {
   const tctx=canvas2d.getContext('2d');
   tctx.fillStyle='#0d1117'; tctx.fillRect(0,0,280,160);
