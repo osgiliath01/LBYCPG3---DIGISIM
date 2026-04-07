@@ -556,32 +556,36 @@
 
 <!-- ============================================================ ABOUT PAGE -->
 <section class="page" id="page-about">
+
+  <!-- Dimmed backdrop — clicking anywhere outside popup closes it -->
+  <div id="memberBackdrop" class="member-backdrop" onclick="closeMemberPopup()" style="display:none;"></div>
+
   <div class="about-page">
     <h2 class="page-title">ABOUT US</h2>
     <p class="about-sub">LBYCPG3 — Group 3 · BS Computer Engineering · Section E25<br/>De La Salle University — Gokongwei College of Engineering</p>
     <div class="team-grid">
-      <div class="team-card">
+      <div class="team-card" onclick="openMemberPopup('liam')" style="cursor:pointer;">
         <img src="images/liam.jpg" alt="GO, Martin Liam K." class="team-photo" style="border:2px solid #3b82f6;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
         <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#0f3460,#1a5276);border:2px solid #3b82f6;display:none;">
           <span class="team-initials">MLG</span>
         </div>
         <h3>GO, Martin Liam K.</h3><p>12319570</p><span class="team-badge">BS-CpE / E25</span>
       </div>
-      <div class="team-card">
+      <div class="team-card" onclick="openMemberPopup('luigi')" style="cursor:pointer;">
         <img src="images/luigi.jpg" alt="SEÑGA, Rommel Luigi M." class="team-photo" style="border:2px solid #00e5a0;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
         <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#0d3b2e,#1a6b52);border:2px solid #00e5a0;display:none;">
           <span class="team-initials">RLS</span>
         </div>
         <h3>SEÑGA, Rommel Luigi M.</h3><p>12341673</p><span class="team-badge">BS-CpE / E25</span>
       </div>
-      <div class="team-card">
+      <div class="team-card" onclick="openMemberPopup('mizi')" style="cursor:pointer;">
         <img src="images/mizi.png" alt="SOTELO, Mitzen Mae L." class="team-photo" style="border:2px solid #a855f7;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
         <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#3b1f6b,#6d28d9);border:2px solid #a855f7;display:none;">
           <span class="team-initials">MMS</span>
         </div>
         <h3>SOTELO, Mitzen Mae L.</h3><p>12370878</p><span class="team-badge">BS-CpE / E25</span>
       </div>
-      <div class="team-card">
+      <div class="team-card" onclick="openMemberPopup('abel')" style="cursor:pointer;">
         <img src="images/abel.png" alt="TRISTAN, Aaron Abel N." class="team-photo" style="border:2px solid #f59e0b;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
         <div class="team-avatar team-photo" style="background:linear-gradient(135deg,#4a1a0a,#b45309);border:2px solid #f59e0b;display:none;">
           <span class="team-initials">AAN</span>
@@ -593,6 +597,29 @@
       <p>DIGISIM is an interactive educational Logic Circuit Simulator built with HTML, CSS, and JavaScript. It allows users to drag-and-drop logic gates, connect them with wires, simulate signal propagation, view truth tables, and simplify Boolean expressions using our built-in Karnaugh Map optimizer.</p>
     </div>
   </div>
+
+  <!-- Member info popup (floats above everything, click outside = close) -->
+  <div id="memberPopup" class="member-popup" onclick="event.stopPropagation()" style="display:none;">
+    <button class="member-popup-close" onclick="closeMemberPopup()"><i class="fa fa-times"></i></button>
+    <div class="member-popup-top">
+      <div class="member-popup-photo-wrap" id="memberPopupPhotoWrap">
+        <img id="memberPopupImg" src="" alt="" class="member-popup-photo"
+          onerror="this.style.display='none';document.getElementById('memberPopupAvatar').style.display='flex'"/>
+        <div id="memberPopupAvatar" class="member-popup-avatar" style="display:none;"></div>
+      </div>
+      <div class="member-popup-header">
+        <h2 id="memberPopupName" class="member-popup-name"></h2>
+        <span id="memberPopupBadge" class="team-badge" style="margin-top:4px;display:inline-block;"></span>
+      </div>
+    </div>
+    <p id="memberPopupBio" class="member-popup-bio"></p>
+    <div id="memberPopupInterests" class="member-popup-interests"></div>
+    <a id="memberPopupEmail" href="#" class="member-popup-email">
+      <i class="fa fa-envelope"></i>
+      <span id="memberPopupEmailText"></span>
+    </a>
+  </div>
+
 </section>
 
 <!-- ============================================================ CIRCUIT ANALYSIS MODAL -->
