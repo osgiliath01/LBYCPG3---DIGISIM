@@ -3139,6 +3139,7 @@ function _proceedToDirectory() {
   if (pg) pg.classList.add('active');
   if (el) el.classList.add('active');
   renderDirectory();
+  _setMobileWorkspaceOverlaysVisible(false);
   window.scrollTo(0, 0);
 }
 
@@ -3850,6 +3851,118 @@ function _confirmModalOk() {
 function _confirmModalCancel() {
   _confirmModalCallback = null;
   closeModal('confirmModal');
+}
+
+// ── MEMBER POPUP (About Us page) ─────────────────────────────────
+const _memberData = {
+  liam: {
+    name: 'GO, Martin Liam K.',
+    initials: 'MLG',
+    color: '#3b82f6',
+    imgSrc: 'images/liam.jpg',
+    avatarBg: 'linear-gradient(135deg,#0f3460,#1a5276)',
+    badge: 'BS-CpE / E25 / 12319570',
+    bio: 'Martin Liam is from the City of Valenzuela, Philippines. He is an undergraduate student currently taking his Bachelor of Science in Computer Engineering (BSCpE) degree from De La Salle University. He was a former member of the Engineering College Government from AY 25-26.',
+    interests: ['Software Engineering', 'Web & Mobile App Development', 'Embedded Software Systems', 'Human-Computer Interaction'],
+    email: 'martin_liam_go@dlsu.edu.ph'
+  },
+  luigi: {
+    name: 'SEÑGA, Rommel Luigi M.',
+    initials: 'RLS',
+    color: '#00e5a0',
+    imgSrc: 'images/luigi.jpg',
+    avatarBg: 'linear-gradient(135deg,#0d3b2e,#1a6b52)',
+    badge: 'BS-CpE / E25 / 12341673',
+    bio: 'Rommel Luigi is from the City of Marikina, Philippines. He is a student of the B.S. degree in Computer Engineering (CpE) from De La Salle University. He was previously a member of the Engineering College Government from AY 25-26 Term 1 to AY 25-26 Term 2.',
+    interests: ['Hardware Electronics', 'Feedback Controls', 'Embedded Systems'],
+    email: 'rommel_senga@dlsu.edu.ph'
+  },
+  mizi: {
+    name: 'SOTELO, Mitzen Mae L.',
+    initials: 'MMS',
+    color: '#a855f7',
+    imgSrc: 'images/mizi.png',
+    avatarBg: 'linear-gradient(135deg,#3b1f6b,#6d28d9)',
+    badge: 'BS-CpE / E25 / 12370878',
+    bio: 'Mitzen Mae is from General Trias, Cavite. She is a student of the B.S. degree in Computer Engineering (CpE) from De La Salle University. She was a former member of the Engineering College Government from AY 25-26.',
+    interests: ['Machine Learning Applications', 'Operating Systems'],
+    email: 'mitzen_mae_sotelo@dlsu.edu.ph'
+  },
+  abel: {
+    name: 'TRISTAN, Aaron Abel N.',
+    initials: 'AAN',
+    color: '#f59e0b',
+    imgSrc: 'images/abel.png',
+    avatarBg: 'linear-gradient(135deg,#4a1a0a,#b45309)',
+    badge: 'BS-CpE / E25 / 12335126',
+    bio: 'Aaron Abel is from the City of Manila, Philippines. He is a student currently taking his Bachelor of Science in Computer Engineering (BSCpE) from De La Salle University. He was a previous member of the Association of Computer Engineering Students AY 2025-2026.',
+    interests: ['Hardware Description Language (HDL)', 'Computer Architecture & Memory Organization', 'Systems-on-Chips (SoC)', 'Digital Logic Design'],
+    email: 'aaron_tristan@dlsu.edu.ph'
+  }
+};
+
+function openMemberPopup(key) {
+  const data = _memberData[key];
+  if (!data) return;
+
+  // Photo / avatar
+  const img = document.getElementById('memberPopupImg');
+  const avatar = document.getElementById('memberPopupAvatar');
+  img.src = data.imgSrc;
+  img.alt = data.name;
+  img.style.display = '';
+  img.style.border = '3px solid ' + data.color;
+  avatar.style.display = 'none';
+  avatar.style.background = data.avatarBg;
+  avatar.style.border = '3px solid ' + data.color;
+  avatar.textContent = data.initials;
+
+  // Text
+  document.getElementById('memberPopupName').textContent = data.name;
+  document.getElementById('memberPopupName').style.color = data.color;
+  document.getElementById('memberPopupBadge').textContent = data.badge;
+  document.getElementById('memberPopupBadge').style.color = data.color;
+  document.getElementById('memberPopupBadge').style.borderColor = data.color + '66';
+  document.getElementById('memberPopupBadge').style.background = data.color + '18';
+  document.getElementById('memberPopupBio').textContent = data.bio;
+
+  // Interest tags
+  const interestsEl = document.getElementById('memberPopupInterests');
+  interestsEl.innerHTML = data.interests.map(i =>
+    `<span class="member-interest-tag" style="border-color:${data.color}44;color:${data.color};background:${data.color}12">
+      <i class="fa fa-microchip" style="font-size:9px;margin-right:4px;opacity:0.7;"></i>${i}
+    </span>`
+  ).join('');
+
+  // Email
+  const emailEl = document.getElementById('memberPopupEmail');
+  const emailText = document.getElementById('memberPopupEmailText');
+  emailEl.href = 'mailto:' + data.email;
+  emailEl.style.color = data.color;
+  emailEl.style.borderColor = data.color + '44';
+  emailEl.style.background = data.color + '10';
+  emailText.textContent = data.email;
+
+  // Top bar accent
+  const popup = document.getElementById('memberPopup');
+  popup.style.setProperty('--member-color', data.color);
+
+  // Show
+  document.getElementById('memberBackdrop').style.display = 'block';
+  popup.style.display = 'flex';
+  // Trigger animation
+  requestAnimationFrame(() => { popup.classList.add('member-popup-open'); });
+}
+
+function closeMemberPopup() {
+  const popup = document.getElementById('memberPopup');
+  const backdrop = document.getElementById('memberBackdrop');
+  popup.classList.remove('member-popup-open');
+  // Wait for transition before hiding
+  setTimeout(() => {
+    popup.style.display = 'none';
+    backdrop.style.display = 'none';
+  }, 220);
 }
 
 // ── TOAST ────────────────────────────────────────────────────────
